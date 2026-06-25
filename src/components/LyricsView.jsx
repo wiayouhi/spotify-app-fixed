@@ -1,7 +1,7 @@
-import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useCallback, useState } from "react";
 
-// Custom smooth scroll with spring-like easing (much better than browser's native smooth)
+/* ─────────── Custom smooth scroll ─────────── */
 function useSmoothScroll(containerRef) {
   const targetScrollTop = useRef(0);
   const currentScrollTop = useRef(0);
@@ -11,21 +11,16 @@ function useSmoothScroll(containerRef) {
   const animateScroll = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
-
     const diff = targetScrollTop.current - currentScrollTop.current;
-    // Stop when close enough
     if (Math.abs(diff) < 0.5) {
       container.scrollTop = targetScrollTop.current;
       currentScrollTop.current = targetScrollTop.current;
       isAnimating.current = false;
       return;
     }
-
-    // Spring-like lerp: 0.08 = slow & smooth, 0.14 = faster
     const step = diff * 0.085;
     currentScrollTop.current += step;
     container.scrollTop = currentScrollTop.current;
-
     rafId.current = requestAnimationFrame(animateScroll);
   }, [containerRef]);
 
@@ -33,9 +28,7 @@ function useSmoothScroll(containerRef) {
     const container = containerRef.current;
     if (!container) return;
     targetScrollTop.current = Math.max(0, top);
-    // If scrolling to top, sync currentScrollTop with actual position
     currentScrollTop.current = container.scrollTop;
-
     if (!isAnimating.current) {
       isAnimating.current = true;
       rafId.current = requestAnimationFrame(animateScroll);
@@ -52,7 +45,100 @@ function useSmoothScroll(containerRef) {
   return { scrollTo, stop };
 }
 
-export default function LyricsView({ status, synced, plain, currentLineIndex, trackId }) {
+/* ─────────── No-lyrics artwork ─────────── */
+function NoLyricsArt({ reason, animSpeed = 1 }) {
+  const dur = (b) => b / animSpeed;
+
+  const configs = {
+    not_found: {
+      title: "ไม่พบเนื้อเพลง",
+      sub: "ไม่มีเนื้อเพลงสำหรับบทเพลงนี้",
+    },
+    idle: {
+      title: "ยังไม่ได้เล่นเพลง",
+      sub: "เปิดเพลงใน Spotify เพื่อเริ่มต้น",
+    },
+    error: {
+      title: "เกิดข้อผิดพลาด",
+      sub: "ไม่สามารถโหลดเนื้อเพลงได้",
+    },
+    hidden: {
+      title: "เนื้อเพลงถูกซ่อน",
+      sub: "เปิดจากแถบตั้งค่าด้านบน",
+    },
+  };
+  const cfg = configs[reason] || configs.idle;
+
+  return (
+    <motion.div
+      className="no-lyrics-art"
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92 }}
+      transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
+    >
+      {/* Concentric rings */}
+      <div className="no-lyrics-rings">
+        {[0, 1, 2].map((i) => (
+          <motion.div
+            key={i}
+            className={`no-lyrics-ring ring-${i}`}
+            animate={{ scale: [1, 1.04, 1], opacity: [0.15, 0.35, 0.15] }}
+            transition={{ duration: dur(3 + i * 0.8), repeat: Infinity, delay: i * 0.5, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+
+      {/* Center icon */}
+      <motion.div
+        className="no-lyrics-icon"
+        animate={{ y: [0, -6, 0], rotate: [0, -3, 3, 0] }}
+        transition={{ duration: dur(4), repeat: Infinity, ease: "easeInOut" }}
+      >
+        {reason === "hidden" ? (
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.4)">
+            <path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
+          </svg>
+        ) : reason === "error" ? (
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,100,100,0.5)">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+          </svg>
+        ) : (
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.35)">
+            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+          </svg>
+        )}
+      </motion.div>
+
+      {/* Text */}
+      <motion.div className="no-lyrics-text"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, duration: dur(0.4) }}
+      >
+        <div className="no-lyrics-title">{cfg.title}</div>
+        <div className="no-lyrics-sub">{cfg.sub}</div>
+      </motion.div>
+
+      {/* Floating dots */}
+      <div className="no-lyrics-dots">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <motion.div key={i} className="no-lyrics-dot"
+            style={{ "--di": i }}
+            animate={{ y: [0, -14, 0], opacity: [0.2, 0.6, 0.2], scale: [1, 1.2, 1] }}
+            transition={{ duration: dur(2 + i * 0.4), repeat: Infinity, delay: i * 0.4, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
+/* ─────────── Main LyricsView ─────────── */
+export default function LyricsView({
+  status, synced, plain, currentLineIndex, trackId,
+  showPanel = true, animSpeed = 1,
+}) {
   const containerRef = useRef(null);
   const lineRefs = useRef({});
   const isUserScrolling = useRef(false);
@@ -61,6 +147,7 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
   const currentIndexRef = useRef(currentLineIndex);
   const [viewMode, setViewMode] = useState("lyrics");
 
+  const dur = (b) => b / animSpeed;
   const { scrollTo, stop } = useSmoothScroll(containerRef);
 
   useEffect(() => { currentIndexRef.current = currentLineIndex; }, [currentLineIndex]);
@@ -69,25 +156,15 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
     if (isUserScrolling.current) return;
     if (index < 0) return;
     if (index === lastAutoScrollLine.current && retryCount === 0) return;
-
     const container = containerRef.current;
     const lineEl = lineRefs.current[index];
-
     if (!container || !lineEl) {
-      if (retryCount < 20) {
-        requestAnimationFrame(() => scrollToLine(index, retryCount + 1));
-      }
+      if (retryCount < 60) requestAnimationFrame(() => scrollToLine(index, retryCount + 1));
       return;
     }
-
     const containerRect = container.getBoundingClientRect();
     const lineRect = lineEl.getBoundingClientRect();
-    const targetTop =
-      container.scrollTop +
-      (lineRect.top - containerRect.top) -
-      container.clientHeight / 2 +
-      lineRect.height / 2;
-
+    const targetTop = container.scrollTop + (lineRect.top - containerRect.top) - container.clientHeight / 2 + lineRect.height / 2;
     scrollTo(targetTop);
     lastAutoScrollLine.current = index;
   }, [scrollTo]);
@@ -111,73 +188,78 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
     lineRefs.current = {};
     lastAutoScrollLine.current = -1;
     isUserScrolling.current = false;
-    // Reset scroll position immediately (no animation) when track changes
+    clearTimeout(userScrollTimer.current);
     const container = containerRef.current;
-    if (container) {
-      container.scrollTop = 0;
-    }
+    if (container) container.scrollTop = 0;
     scrollTo(0);
   }, [trackId, scrollTo]);
 
   const hasContent = status === "found" && (synced || plain);
 
-  if (!hasContent) {
-    const stateMap = {
-      loading: { icon: null, text: "กำลังค้นหาเนื้อเพลง...", spinner: true },
-      not_found: { icon: "🎵", text: "ไม่พบเนื้อเพลงสำหรับเพลงนี้" },
-      error: { icon: "⚠️", text: "เกิดข้อผิดพลาดในการโหลดเนื้อเพลง" },
-      idle: { icon: "🎧", text: "เปิดเพลงใน Spotify เพื่อเริ่มต้น" },
-    };
-    const state = stateMap[status] || stateMap.idle;
-
+  // If panel is hidden → show "hidden" state
+  if (!showPanel) {
     return (
-      <div className="lyrics-empty-state">
-        <div className="lyrics-empty-orbs">
-          {[...Array(5)].map((_, i) => (
-            <motion.div key={i} className="empty-orb" style={{ "--orb-i": i }}
-              animate={{ y: [0, -20, 0], opacity: [0.3, 0.7, 0.3], scale: [1, 1.15, 1] }}
-              transition={{ duration: 2.5 + i * 0.4, repeat: Infinity, delay: i * 0.5, ease: "easeInOut" }}
+      <AnimatePresence mode="wait">
+        <NoLyricsArt key="hidden" reason="hidden" animSpeed={animSpeed} />
+      </AnimatePresence>
+    );
+  }
+
+  // Loading / not found / error / idle
+  if (!hasContent) {
+    return (
+      <AnimatePresence mode="wait">
+        {status === "loading" ? (
+          <motion.div
+            key="loading"
+            className="lyrics-empty-state"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          >
+            <div className="no-lyrics-rings">
+              {[0, 1, 2].map((i) => (
+                <motion.div key={i} className={`no-lyrics-ring ring-${i}`}
+                  animate={{ scale: [1, 1.04, 1], opacity: [0.15, 0.35, 0.15] }}
+                  transition={{ duration: dur(3 + i * 0.8), repeat: Infinity, delay: i * 0.5, ease: "easeInOut" }}
+                />
+              ))}
+            </div>
+            <motion.div className="lyrics-spinner"
+              animate={{ rotate: 360 }}
+              transition={{ duration: dur(1), repeat: Infinity, ease: "linear" }}
             />
-          ))}
-        </div>
-        {state.spinner ? (
-          <motion.div className="lyrics-spinner"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          />
+            <motion.span className="empty-text"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+            >
+              กำลังค้นหาเนื้อเพลง...
+            </motion.span>
+          </motion.div>
         ) : (
-          <motion.span className="empty-icon"
-            animate={{ scale: [1, 1.08, 1], rotate: [0, -5, 5, 0] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-          >{state.icon}</motion.span>
+          <NoLyricsArt key={status} reason={status} animSpeed={animSpeed} />
         )}
-        <motion.span className="empty-text"
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-        >{state.text}</motion.span>
-      </div>
+      </AnimatePresence>
     );
   }
 
   return (
     <div className="lyrics-view-root">
-      {/* Toggle button */}
+      {/* Mode toggle button */}
       <motion.button
         className="lyrics-toggle-btn"
-        onClick={() => setViewMode(v => v === "lyrics" ? "fulltime" : "lyrics")}
+        onClick={() => setViewMode((v) => (v === "lyrics" ? "fulltime" : "lyrics"))}
         whileHover={{ scale: 1.06, background: "rgba(255,255,255,0.18)" }}
         whileTap={{ scale: 0.93 }}
-        title={viewMode === "lyrics" ? "โหมดเต็มจอ" : "โหมดเนื้อเพลง"}
+        title={viewMode === "lyrics" ? "โหมดใหญ่" : "โหมดเนื้อเพลง"}
       >
         <AnimatePresence mode="wait">
           <motion.span key={viewMode}
             initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
             animate={{ opacity: 1, rotate: 0, scale: 1 }}
             exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
-            transition={{ duration: 0.25, ease: "backOut" }}
+            transition={{ duration: dur(0.25), ease: "backOut" }}
           >
             {viewMode === "lyrics" ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
               </svg>
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -189,27 +271,30 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
         <AnimatePresence mode="wait">
           <motion.span key={viewMode + "-label"} className="toggle-label"
             initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 6 }}
-            transition={{ duration: 0.2 }}
-          >{viewMode === "lyrics" ? "เวลา" : "เนื้อเพลง"}</motion.span>
+            transition={{ duration: dur(0.2) }}
+          >
+            {viewMode === "lyrics" ? "โหมดใหญ่" : "เนื้อเพลง"}
+          </motion.span>
         </AnimatePresence>
       </motion.button>
 
+      {/* Content */}
       <AnimatePresence mode="wait">
         {viewMode === "fulltime" ? (
           <motion.div key="fulltime" className="lyrics-fulltime-view"
             initial={{ opacity: 0, scale: 0.88, filter: "blur(16px)", y: 30 }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
             exit={{ opacity: 0, scale: 1.06, filter: "blur(16px)", y: -30 }}
-            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: dur(0.55), ease: [0.16, 1, 0.3, 1] }}
           >
-            <FullTimeDisplay synced={synced} currentLineIndex={currentLineIndex} trackId={trackId} />
+            <FullTimeDisplay synced={synced} currentLineIndex={currentLineIndex} trackId={trackId} animSpeed={animSpeed} />
           </motion.div>
         ) : (
           <motion.div key="lyrics" className="lyrics-mode-wrap"
             initial={{ opacity: 0, scale: 0.94, filter: "blur(10px)", y: 20 }}
             animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
             exit={{ opacity: 0, scale: 0.94, filter: "blur(10px)", y: -20 }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
             style={{ height: "100%", width: "100%" }}
           >
             {synced ? (
@@ -223,14 +308,13 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
                 <AnimatePresence mode="wait">
                   <motion.div key={trackId} className="lyrics-lines"
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    transition={{ duration: 0.4 }}
+                    transition={{ duration: dur(0.4) }}
                   >
                     <div className="lyrics-spacer" />
                     {synced.map((line, i) => {
                       const distance = Math.abs(i - currentLineIndex);
                       const isActive = i === currentLineIndex;
                       const isPast = i < currentLineIndex;
-
                       return (
                         <motion.p
                           key={`${trackId}-${i}`}
@@ -238,26 +322,13 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
                           className={`lyric-line ${isActive ? "active" : ""}`}
                           initial={false}
                           animate={{
-                            opacity: isActive
-                              ? 1
-                              : isPast
-                                ? Math.max(0.12, 0.45 - distance * 0.1)
-                                : Math.max(0.18, 0.55 - distance * 0.12),
+                            opacity: isActive ? 1 : isPast ? Math.max(0.12, 0.45 - distance * 0.1) : Math.max(0.18, 0.55 - distance * 0.12),
                             scale: isActive ? 1.06 : Math.max(0.88, 1 - distance * 0.025),
-                            filter: isActive
-                              ? "blur(0px)"
-                              : `blur(${Math.min(distance * 0.6, 3)}px)`,
+                            filter: isActive ? "blur(0px)" : `blur(${Math.min(distance * 0.6, 3)}px)`,
                             x: isActive ? 0 : isPast ? -6 : 4,
                             color: isActive ? "#ffffff" : "rgba(255,255,255,0.45)",
                           }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 90,
-                            damping: 20,
-                            mass: 1.1,
-                            // stagger feel: lines further away animate slightly delayed
-                            delay: distance > 3 ? 0 : 0,
-                          }}
+                          transition={{ type: "spring", stiffness: 90 * animSpeed, damping: 20, mass: 1.1 }}
                           style={{ transformOrigin: "left center" }}
                         >
                           {line.text || "\u00A0"}
@@ -273,7 +344,7 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
                 <AnimatePresence mode="wait">
                   <motion.div key={trackId}
                     initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: dur(0.5) }}
                   >
                     {plain.split("\n").map((line, i) => (
                       <p key={i} className="lyric-line plain">{line || "\u00A0"}</p>
@@ -289,24 +360,24 @@ export default function LyricsView({ status, synced, plain, currentLineIndex, tr
   );
 }
 
-function FullTimeDisplay({ synced, currentLineIndex, trackId }) {
+/* ─────────── FullTime karaoke view ─────────── */
+function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
   const curr = synced?.[currentLineIndex];
   const prev = synced?.[currentLineIndex - 1];
   const next = synced?.[currentLineIndex + 1];
   const next2 = synced?.[currentLineIndex + 2];
+  const dur = (b) => b / animSpeed;
 
   return (
     <div className="fulltime-display">
-      {/* Ambient glow that pulses with each line change */}
       <motion.div
         key={`glow-${currentLineIndex}`}
         className="fulltime-glow"
         initial={{ opacity: 0, scale: 0.6 }}
         animate={{ opacity: [0.4, 0.15], scale: [0.8, 1.6] }}
-        transition={{ duration: 1.8, ease: "easeOut" }}
+        transition={{ duration: dur(1.8), ease: "easeOut" }}
       />
 
-      {/* Background ghost lyrics */}
       <div className="fulltime-bg-words">
         {synced?.slice(Math.max(0, currentLineIndex - 2), currentLineIndex + 5).map((line, i) => (
           <motion.span key={`bg-${trackId}-${currentLineIndex}-${i}`}
@@ -318,19 +389,17 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId }) {
         ))}
       </div>
 
-      {/* prev */}
       <AnimatePresence mode="popLayout">
         {prev && (
           <motion.p key={`prev-${currentLineIndex}`} className="fulltime-prev"
             initial={{ opacity: 0, y: 16, filter: "blur(6px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -16, scale: 0.93, filter: "blur(6px)" }}
-            transition={{ type: "spring", stiffness: 160, damping: 24 }}
+            transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 24 }}
           >{prev.text}</motion.p>
         )}
       </AnimatePresence>
 
-      {/* CURRENT — big & glowing */}
       <AnimatePresence mode="popLayout">
         <motion.p
           key={`curr-${currentLineIndex}-${trackId}`}
@@ -338,42 +407,39 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId }) {
           initial={{ opacity: 0, scale: 0.82, y: 28, filter: "blur(12px)", letterSpacing: "0.1em" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)", letterSpacing: "-0.03em" }}
           exit={{ opacity: 0, scale: 1.1, y: -28, filter: "blur(12px)" }}
-          transition={{ type: "spring", stiffness: 200, damping: 26, mass: 0.9 }}
+          transition={{ type: "spring", stiffness: 200 * animSpeed, damping: 26, mass: 0.9 }}
         >
           {curr?.text || "\u00A0"}
         </motion.p>
       </AnimatePresence>
 
-      {/* next */}
       <AnimatePresence mode="popLayout">
         {next && (
           <motion.p key={`next-${currentLineIndex}`} className="fulltime-next"
             initial={{ opacity: 0, y: -16, filter: "blur(6px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: 16, scale: 0.93, filter: "blur(6px)" }}
-            transition={{ type: "spring", stiffness: 160, damping: 24 }}
+            transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 24 }}
           >{next.text}</motion.p>
         )}
       </AnimatePresence>
 
-      {/* next+1 dimmer */}
       <AnimatePresence mode="popLayout">
         {next2 && (
           <motion.p key={`next2-${currentLineIndex}`} className="fulltime-next2"
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
+            transition={{ duration: dur(0.3), ease: "easeOut" }}
           >{next2.text}</motion.p>
         )}
       </AnimatePresence>
 
-      {/* Pulse dots */}
       <div className="fulltime-dots">
         {[0, 1, 2].map((i) => (
           <motion.div key={i} className="fulltime-dot"
             animate={{ scale: [1, 1.6, 1], opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+            transition={{ duration: dur(1.4), repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
           />
         ))}
       </div>

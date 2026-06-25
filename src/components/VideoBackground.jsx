@@ -1,18 +1,29 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const INVIDIOUS_INSTANCES = [
+  "https://invidious.slipfox.xyz",
+  "https://inv.tux.pizza",
+  "https://invidious.protokolla.fi",
+  "https://invidious.asir.dev"
+];
+
 async function findYouTubeVideo(track, artist) {
   const query = encodeURIComponent(`${track} ${artist} official music video`);
-  try {
-    const res = await fetch(
-      `https://inv.nadeko.net/api/v1/search?q=${query}&type=video&fields=videoId,title&page=1`
-    );
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    return data?.[0]?.videoId || null;
-  } catch {
-    return null;
+  
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const res = await fetch(
+        `${instance}/api/v1/search?q=${query}&type=video&fields=videoId,title&page=1`
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data?.[0]?.videoId) return data[0].videoId;
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 export default function VideoBackground({ track }) {
