@@ -1,25 +1,24 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { fetchCurrentlyPlaying } from "../utils/spotifyApi";
 
-// Adaptive polling: เร็วขึ้นเมื่อเพลงเล่น ช้าลงเมื่อหยุด/tab ซ่อน
-const POLL_PLAYING = 2000;
-const POLL_PAUSED  = 5000;
-const POLL_HIDDEN  = 15000;
+const POLL_INTERVAL_MS = 3000;          // poll ทุก 3 วิ (ลดจาก 2 วิ)
+const POLL_INTERVAL_BACKGROUND_MS = 10000; // tab ซ่อน — ลด poll เหลือ 10 วิ
 
 export function useSpotifyNowPlaying() {
-  const [track, setTrack]       = useState(null);
+  const [track, setTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progressMs, setProgressMs] = useState(0);
-  const [authError, setAuthError]   = useState(false);
-  const [loading, setLoading]       = useState(true);
+  const [authError, setAuthError] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const lastFetch  = useRef({ progressMs: 0, fetchedAt: 0 });
-  const rafRef     = useRef(null);
-  const timerRef   = useRef(null);
-  const isPlayingRef = useRef(false);
+  const lastFetch = useRef({ progressMs: 0, fetchedAt: 0 });
+  const rafRef = useRef(null);
+  const trackIdRef = useRef(null);
+  const intervalRef = useRef(null);
+  const isPlayingRef = useRef(false); // sync ref for RAF
 
-  // sync ref กับ state เพื่อใช้ใน closure
-  isPlayingRef.current = isPlaying;
+  // Keep ref in sync with state
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   const poll = useCallback(async () => {
     const result = await fetchCurrentlyPlaying();
@@ -29,69 +28,76 @@ export function useSpotifyNowPlaying() {
       setLoading(false);
       return;
     }
-    if (result.error) { setLoading(false); return; }
+
+    if (result.error) {
+      setLoading(false);
+      return;
+    }
 
     setLoading(false);
     setIsPlaying(Boolean(result.isPlaying));
 
     if (!result.track) {
       setTrack(null);
+      trackIdRef.current = null;
       return;
     }
 
     lastFetch.current = {
       progressMs: result.progressMs || 0,
-      fetchedAt:  result.fetchedAt,
+      fetchedAt: result.fetchedAt,
     };
     setProgressMs(result.progressMs || 0);
 
     setTrack((prev) => {
       if (prev?.id === result.track.id) return prev;
+      trackIdRef.current = result.track.id;
       return result.track;
     });
   }, []);
 
-  // Adaptive polling scheduler
-  const scheduleNextPoll = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const hidden  = document.visibilityState === "hidden";
-    const delay   = hidden ? POLL_HIDDEN : isPlayingRef.current ? POLL_PLAYING : POLL_PAUSED;
-    timerRef.current = setTimeout(async () => {
-      await poll();
-      scheduleNextPoll();
-    }, delay);
+  // ──────────────────────────────────────────────────────
+  // Smart polling: ช้าลงเมื่อ tab ถูกซ่อน / เร็วขึ้นเมื่อกลับมา
+  // ──────────────────────────────────────────────────────
+  const startPolling = useCallback((interval) => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(poll, interval);
   }, [poll]);
 
   useEffect(() => {
-    poll().then(scheduleNextPoll);
+    poll();
+    startPolling(POLL_INTERVAL_MS);
 
-    // เร่ง poll ทันทีเมื่อ tab กลับมา
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        poll().then(scheduleNextPoll);
+    const handleVisibility = () => {
+      if (document.hidden) {
+        startPolling(POLL_INTERVAL_BACKGROUND_MS);
+      } else {
+        poll(); // poll ทันทีเมื่อ tab กลับมา
+        startPolling(POLL_INTERVAL_MS);
       }
     };
-    document.addEventListener("visibilitychange", onVisible);
 
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      clearTimeout(timerRef.current);
-      document.removeEventListener("visibilitychange", onVisible);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [poll, scheduleNextPoll]);
+  }, [poll, startPolling]);
 
-  // Smooth progress interpolation ด้วย RAF — หยุดเมื่อ pause/hidden
+  // Smooth progress interpolation via RAF
   useEffect(() => {
-    let animId;
     function tick() {
-      if (isPlaying && document.visibilityState === "visible") {
+      if (isPlayingRef.current) {
         const elapsed = Date.now() - lastFetch.current.fetchedAt;
         setProgressMs(lastFetch.current.progressMs + elapsed);
       }
-      animId = requestAnimationFrame(tick);
+      rafRef.current = requestAnimationFrame(tick);
     }
-    animId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animId);
-  }, [isPlaying]);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return { track, isPlaying, progressMs, authError, loading };
 }
