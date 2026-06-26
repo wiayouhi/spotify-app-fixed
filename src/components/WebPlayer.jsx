@@ -4,20 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 /**
  * WebPlayer — Spotify Web Playback SDK
  *
- * บั๊กที่แก้:
- * 1. ลบ player_state_changed auto-resume ที่ position=0 ออก
- *    → ทำให้ user กด pause ไม่ได้ / เพลงใหม่เริ่มแล้วรวน
- * 2. ลบ AudioContext แยกออก → ชนกับ SDK ทำให้เปิดไม่ขึ้น
- * 3. keep-alive เปลี่ยนเป็น getCurrentState() อย่างเดียว
- *    → ป้องกัน SDK disconnect โดยไม่ยุ่งกับ playback state
+ * expose playerRef ผ่าน window.__spotifyPlayer
+ * เพื่อให้ PlayerControls ใช้ SDK method โดยตรงเมื่อ active
+ * แทนการเรียก REST API (ซึ่งจะ fail เพราะ device ไม่ตรง)
  */
 export default function WebPlayer({ animSpeed = 1 }) {
-  const [status, setStatus] = useState("idle");
-  const playerRef    = useRef(null);
-  const deviceIdRef  = useRef(null);
-  const keepAliveRef = useRef(null);
-  // ติดตาม pause state ที่ user ตั้งใจ กด เพื่อไม่ให้ keep-alive ไป resume
-  const userPausedRef = useRef(false);
+  const [status, setStatus]     = useState("idle");
+  const playerRef               = useRef(null);
+  const deviceIdRef             = useRef(null);
+  const keepAliveRef            = useRef(null);
 
   const getToken = useCallback(() =>
     localStorage.getItem("spotify_access_token") ||
@@ -40,8 +35,6 @@ export default function WebPlayer({ animSpeed = 1 }) {
     }
   }, [getToken]);
 
-  // keep-alive: แค่ poll state ทุก 25 วิ เพื่อป้องกัน SDK timeout
-  // ไม่แตะ playback เลย — ให้ Spotify จัดการเอง
   const startKeepAlive = useCallback(() => {
     if (keepAliveRef.current) clearInterval(keepAliveRef.current);
     keepAliveRef.current = setInterval(() => {
@@ -50,10 +43,8 @@ export default function WebPlayer({ animSpeed = 1 }) {
   }, []);
 
   const stopKeepAlive = useCallback(() => {
-    if (keepAliveRef.current) {
-      clearInterval(keepAliveRef.current);
-      keepAliveRef.current = null;
-    }
+    clearInterval(keepAliveRef.current);
+    keepAliveRef.current = null;
   }, []);
 
   const initPlayer = () => {
@@ -71,18 +62,17 @@ export default function WebPlayer({ animSpeed = 1 }) {
 
       player.addListener("ready", ({ device_id }) => {
         deviceIdRef.current = device_id;
+        // expose ให้ PlayerControls ใช้ได้
+        window.__spotifyPlayer    = player;
+        window.__spotifyDeviceId  = device_id;
         setStatus("ready");
       });
 
       player.addListener("not_ready", () => {
-        setStatus("idle");
+        window.__spotifyPlayer   = null;
+        window.__spotifyDeviceId = null;
         stopKeepAlive();
-      });
-
-      // ติดตาม pause state จาก user — ห้าม auto-resume
-      player.addListener("player_state_changed", (state) => {
-        if (!state) return;
-        userPausedRef.current = state.paused;
+        setStatus("idle");
       });
 
       player.addListener("initialization_error", () => setStatus("error"));
@@ -94,21 +84,18 @@ export default function WebPlayer({ animSpeed = 1 }) {
     };
 
     if (!document.getElementById("spotify-sdk")) {
-      const script = document.createElement("script");
-      script.id  = "spotify-sdk";
-      script.src = "https://sdk.scdn.co/spotify-player.js";
+      const script   = document.createElement("script");
+      script.id      = "spotify-sdk";
+      script.src     = "https://sdk.scdn.co/spotify-player.js";
       document.head.appendChild(script);
     } else if (window.Spotify) {
       window.onSpotifyWebPlaybackSDKReady();
     }
   };
 
-  // startPlayback: ต้องเรียกใน user gesture เพื่อ unlock audio
   const startPlayback = () => {
     if (!playerRef.current) return;
-    // activateElement() ต้องเรียกก่อนเสมอใน user gesture
-    playerRef.current.activateElement();
-    userPausedRef.current = false;
+    playerRef.current.activateElement(); // unlock audio — ต้องอยู่ใน user gesture
     transferPlayback(deviceIdRef.current);
     setStatus("active");
     startKeepAlive();
@@ -116,36 +103,30 @@ export default function WebPlayer({ animSpeed = 1 }) {
 
   const handleDisconnect = () => {
     stopKeepAlive();
-    if (playerRef.current) {
-      playerRef.current.disconnect();
-      playerRef.current = null;
-      deviceIdRef.current = null;
-    }
-    userPausedRef.current = false;
+    playerRef.current?.disconnect();
+    playerRef.current            = null;
+    deviceIdRef.current          = null;
+    window.__spotifyPlayer       = null;
+    window.__spotifyDeviceId     = null;
     setStatus("idle");
   };
 
-  // เมื่อ tab กลับมา visible — activate element เพื่อป้องกัน audio context suspend
-  // แต่ resume เฉพาะเมื่อ user ไม่ได้ตั้งใจ pause ไว้
+  // เมื่อ tab กลับมา — activate เพื่อป้องกัน audio suspend
   useEffect(() => {
     const onVisible = () => {
-      if (status !== "active" || !playerRef.current) return;
-      if (document.visibilityState === "visible") {
-        playerRef.current.activateElement();
-        if (!userPausedRef.current) {
-          playerRef.current.resume().catch(() => {});
-        }
+      if (status === "active" && document.visibilityState === "visible") {
+        playerRef.current?.activateElement();
       }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [status]);
 
-  useEffect(() => {
-    return () => {
-      stopKeepAlive();
-      playerRef.current?.disconnect();
-    };
+  useEffect(() => () => {
+    stopKeepAlive();
+    playerRef.current?.disconnect();
+    window.__spotifyPlayer   = null;
+    window.__spotifyDeviceId = null;
   }, [stopKeepAlive]);
 
   const dur = (b) => b / animSpeed;
@@ -156,13 +137,10 @@ export default function WebPlayer({ animSpeed = 1 }) {
         {status === "idle" && (
           <motion.button key="idle" className="video-bg-btn webplayer-btn"
             onClick={initPlayer}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: dur(0.25) }}
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: dur(0.25) }}
             title="เปิดใช้งานเล่นเสียงใน Browser"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zm-8-1l6-5-6-5v10z"/>
@@ -188,10 +166,8 @@ export default function WebPlayer({ animSpeed = 1 }) {
           <motion.button key="ready" className="video-bg-btn webplayer-btn"
             style={{ borderColor: "#1db954", color: "#1db954" }}
             onClick={startPlayback}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: dur(0.25) }}
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: dur(0.25) }}
             title="คลิกเพื่อเริ่มเล่นเสียงใน Browser"
             whileHover={{ scale: 1.05, backgroundColor: "rgba(29,185,84,0.15)" }}
             whileTap={{ scale: 0.95 }}
@@ -206,15 +182,12 @@ export default function WebPlayer({ animSpeed = 1 }) {
         {status === "active" && (
           <motion.button key="active" className="video-bg-btn webplayer-btn webplayer-active"
             onClick={handleDisconnect}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: dur(0.25) }}
+            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: dur(0.25) }}
             title="กำลังเล่นใน Browser — คลิกเพื่อยกเลิก"
             whileTap={{ scale: 0.95 }}
           >
-            <motion.div
-              animate={{ scale: [1, 1.3, 1] }}
+            <motion.div animate={{ scale: [1, 1.3, 1] }}
               transition={{ duration: dur(1.2), repeat: Infinity, ease: "easeInOut" }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
