@@ -1,21 +1,27 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+// Working Invidious instances with CORS support (updated June 2026)
 const INVIDIOUS_INSTANCES = [
-  "https://invidious.slipfox.xyz",
-  "https://inv.tux.pizza",
-  "https://invidious.protokolla.fi",
-  "https://invidious.asir.dev"
+  "https://invidious.nerdvpn.de",
+  "https://iv.melmac.space",
+  "https://invidious.privacydev.net",
+  "https://yt.drgnz.club",
+  "https://invidious.fdn.fr",
 ];
 
 async function findYouTubeVideo(track, artist) {
   const query = encodeURIComponent(`${track} ${artist} official music video`);
-  
+
   for (const instance of INVIDIOUS_INSTANCES) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(
-        `${instance}/api/v1/search?q=${query}&type=video&fields=videoId,title&page=1`
+        `${instance}/api/v1/search?q=${query}&type=video&fields=videoId,title&page=1`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeout);
       if (!res.ok) continue;
       const data = await res.json();
       if (data?.[0]?.videoId) return data[0].videoId;
@@ -40,7 +46,9 @@ export default function VideoBackground({ track }) {
       if (cancelled) return;
       if (id) setVideoId(id);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [track?.id]);
 
   return (

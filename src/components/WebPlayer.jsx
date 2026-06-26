@@ -3,19 +3,23 @@ import { motion, AnimatePresence } from "framer-motion";
 
 /**
  * WebPlayer — Spotify Web Playback SDK
- * แก้ปัญหาเสียงหายหลัง 10 วิ: keepalive audio context + periodic activateElement
+ * Fix: เสียงหายหลัง 10 วิ → aggressive AudioContext keep-alive
+ * - playSilence ทุก 5 วิ (ลดจาก 8)
+ * - resume AudioContext ทันทีที่ state = suspended
+ * - ฟัง visibilitychange เพื่อ resume เมื่อ tab กลับมา
+ * - ฟัง window focus เพื่อ unlock AudioContext
  */
 export default function WebPlayer({ animSpeed = 1 }) {
-  const [status, setStatus] = useState("idle"); // idle | loading | ready | active | error
+  const [status, setStatus] = useState("idle");
   const [deviceName] = useState("Music App Browser");
   const playerRef = useRef(null);
   const deviceIdRef = useRef(null);
   const keepAliveRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  const getToken = () => {
-    return localStorage.getItem("spotify_access_token") || sessionStorage.getItem("spotify_access_token");
-  };
+  const getToken = () =>
+    localStorage.getItem("spotify_access_token") ||
+    sessionStorage.getItem("spotify_access_token");
 
   const transferPlayback = async (deviceId) => {
     const token = getToken();
@@ -23,7 +27,10 @@ export default function WebPlayer({ animSpeed = 1 }) {
     try {
       await fetch("https://api.spotify.com/v1/me/player", {
         method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ device_ids: [deviceId], play: true }),
       });
     } catch (e) {
@@ -31,57 +38,53 @@ export default function WebPlayer({ animSpeed = 1 }) {
     }
   };
 
-  // ────────────────────────────────────────────────
-  // CORE FIX: Keep AudioContext alive by playing a
-  // silent buffer every 8 seconds so browser won't
-  // suspend the audio context (causing sound to vanish)
-  // ────────────────────────────────────────────────
-  const startKeepAlive = useCallback(() => {
-    stopKeepAlive();
-
-    // Create AudioContext if needed
+  // ─────────────────────────────────────────────────────
+  // Ensure AudioContext exists and is running
+  // ─────────────────────────────────────────────────────
+  const ensureAudioContext = useCallback(async () => {
     if (!audioCtxRef.current) {
       try {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtxRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)();
       } catch (e) {
         console.warn("AudioContext not available:", e);
-        return;
+        return false;
       }
     }
-
-    const playSilence = () => {
-      const ctx = audioCtxRef.current;
-      if (!ctx) return;
-
-      // Resume if suspended
-      if (ctx.state === "suspended") {
-        ctx.resume().catch(() => {});
-      }
-
-      // Play 0.1s of silence to reset browser inactivity timer
+    const ctx = audioCtxRef.current;
+    if (ctx.state === "suspended") {
       try {
-        const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start();
+        await ctx.resume();
       } catch (e) {
         // ignore
       }
-
-      // Also call activateElement on Spotify player to keep it alive
-      if (playerRef.current) {
-        try {
-          playerRef.current.activateElement();
-        } catch (e) {
-          // ignore
-        }
-      }
-    };
-
-    // Play silence every 8 seconds
-    keepAliveRef.current = setInterval(playSilence, 8000);
+    }
+    return ctx.state === "running";
   }, []);
+
+  const playSilence = useCallback(async () => {
+    const ok = await ensureAudioContext();
+    if (!ok) return;
+    const ctx = audioCtxRef.current;
+    try {
+      // 0.2s silent buffer — longer than before so browser registers activity
+      const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.2), ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start();
+    } catch (e) {
+      // ignore
+    }
+    // Also ping Spotify player
+    if (playerRef.current) {
+      try {
+        playerRef.current.activateElement();
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [ensureAudioContext]);
 
   const stopKeepAlive = useCallback(() => {
     if (keepAliveRef.current) {
@@ -90,11 +93,41 @@ export default function WebPlayer({ animSpeed = 1 }) {
     }
   }, []);
 
+  const startKeepAlive = useCallback(() => {
+    stopKeepAlive();
+    playSilence(); // immediate first ping
+    // Every 5 seconds (was 8 — browser suspends context after ~10s of silence)
+    keepAliveRef.current = setInterval(playSilence, 5000);
+  }, [playSilence, stopKeepAlive]);
+
+  // Resume AudioContext when tab becomes visible again
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && keepAliveRef.current) {
+        ensureAudioContext();
+        playSilence();
+      }
+    };
+    const onFocus = () => {
+      if (keepAliveRef.current) {
+        ensureAudioContext();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [ensureAudioContext, playSilence]);
+
   const initPlayer = () => {
     if (playerRef.current) return;
     const token = getToken();
-    if (!token) { setStatus("error"); return; }
-
+    if (!token) {
+      setStatus("error");
+      return;
+    }
     setStatus("loading");
 
     window.onSpotifyWebPlaybackSDKReady = () => {
@@ -114,14 +147,21 @@ export default function WebPlayer({ animSpeed = 1 }) {
         stopKeepAlive();
       });
 
-      player.addListener("initialization_error", () => { setStatus("error"); stopKeepAlive(); });
-      player.addListener("authentication_error", () => { setStatus("error"); stopKeepAlive(); });
-      player.addListener("account_error", () => { setStatus("error"); stopKeepAlive(); });
+      player.addListener("initialization_error", () => {
+        setStatus("error");
+        stopKeepAlive();
+      });
+      player.addListener("authentication_error", () => {
+        setStatus("error");
+        stopKeepAlive();
+      });
+      player.addListener("account_error", () => {
+        setStatus("error");
+        stopKeepAlive();
+      });
 
-      // Handle player state changes to detect actual playback
       player.addListener("player_state_changed", (state) => {
         if (state && !state.paused) {
-          // Music is playing — ensure keep-alive is running
           if (!keepAliveRef.current) startKeepAlive();
         }
       });
@@ -140,17 +180,11 @@ export default function WebPlayer({ animSpeed = 1 }) {
     }
   };
 
-  const startPlayback = () => {
+  const startPlayback = async () => {
+    // Unlock AudioContext on user gesture (required by browsers)
+    await ensureAudioContext();
+
     if (playerRef.current) {
-      // Unlock AudioContext on user gesture
-      if (audioCtxRef.current?.state === "suspended") {
-        audioCtxRef.current.resume().catch(() => {});
-      } else if (!audioCtxRef.current) {
-        try {
-          audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        } catch (e) {}
-      }
-      
       playerRef.current.activateElement();
       playerRef.current.resume().catch(() => {});
     }
@@ -173,7 +207,6 @@ export default function WebPlayer({ animSpeed = 1 }) {
     setStatus("idle");
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopKeepAlive();
@@ -199,7 +232,7 @@ export default function WebPlayer({ animSpeed = 1 }) {
             whileTap={{ scale: 0.95 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zm-8-1l6-5-6-5v10z"/>
+              <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zm-8-1l6-5-6-5v10z" />
             </svg>
             เว็บ
           </motion.button>
@@ -208,10 +241,13 @@ export default function WebPlayer({ animSpeed = 1 }) {
           <motion.div
             key="loading"
             className="video-bg-btn webplayer-btn webplayer-loading"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: dur(0.2) }}
           >
-            <motion.div className="webplayer-spinner"
+            <motion.div
+              className="webplayer-spinner"
               animate={{ rotate: 360 }}
               transition={{ duration: dur(1), repeat: Infinity, ease: "linear" }}
             />
@@ -233,7 +269,7 @@ export default function WebPlayer({ animSpeed = 1 }) {
             whileTap={{ scale: 0.95 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z"/>
+              <path d="M8 5v14l11-7z" />
             </svg>
             คลิกเพื่อเล่นเสียง
           </motion.button>
@@ -255,7 +291,7 @@ export default function WebPlayer({ animSpeed = 1 }) {
               transition={{ duration: dur(1.2), repeat: Infinity, ease: "easeInOut" }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="8" fill="currentColor"/>
+                <circle cx="12" cy="12" r="8" fill="currentColor" />
               </svg>
             </motion.div>
             เว็บ (กำลังเล่น)
@@ -266,12 +302,14 @@ export default function WebPlayer({ animSpeed = 1 }) {
             key="error"
             className="video-bg-btn webplayer-btn webplayer-error"
             onClick={() => setStatus("idle")}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: dur(0.2) }}
             title="ต้องการ Spotify Premium"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
             </svg>
             ต้องการ Premium
           </motion.button>
