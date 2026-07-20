@@ -38,6 +38,18 @@ async function playTrack(uri) {
 
 const HOTKEY = "i"; // secret key to open fullscreen search
 const cursorSpring = { type: "spring", stiffness: 500, damping: 40 };
+const EASE = [0.22, 1, 0.36, 1];
+
+// orchestration: each section fades/slides in on its own beat instead of
+// everything popping in at once
+const innerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+};
+const sectionVariants = {
+  hidden: { opacity: 0, y: 16, filter: "blur(4px)" },
+  visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.45, ease: EASE } },
+};
 
 export default function SearchBar({ onPlay }) {
   const [open, setOpen] = useState(false);
@@ -49,6 +61,16 @@ export default function SearchBar({ onPlay }) {
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
   const itemRefs = useRef([]);
+
+  // mirror the latest state in refs so a *single*, never-re-subscribed
+  // keydown listener can always read fresh values. Re-adding/removing the
+  // window listener on every state change was the root cause of the hotkey
+  // going dead after the first use (a stale-closure race during the
+  // "select track -> close -> reopen" sequence).
+  const stateRef = useRef({ open, results, selectedIndex, playingId });
+  useEffect(() => {
+    stateRef.current = { open, results, selectedIndex, playingId };
+  }, [open, results, selectedIndex, playingId]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -76,14 +98,14 @@ export default function SearchBar({ onPlay }) {
     [onPlay, close]
   );
 
-  // secret key: press "i" anywhere (not while typing) to open fullscreen search.
-  // once open, arrow keys move the selection and Enter plays it.
+  // single stable listener, attached once for the lifetime of the component
   useEffect(() => {
     const handleKeyDown = (e) => {
+      const { open: isOpen, results: currentResults, selectedIndex: currentIndex, playingId: currentPlayingId } = stateRef.current;
       const tag = document.activeElement?.tagName;
       const isTyping = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
 
-      if (!open) {
+      if (!isOpen) {
         if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === HOTKEY) {
           e.preventDefault();
           openPanel();
@@ -96,22 +118,22 @@ export default function SearchBar({ onPlay }) {
         close();
         return;
       }
-      if (e.key === "ArrowDown" && results.length > 0) {
+      if (e.key === "ArrowDown" && currentResults.length > 0) {
         e.preventDefault();
-        setSelectedIndex((i) => Math.min(i + 1, results.length - 1));
+        setSelectedIndex((i) => Math.min(i + 1, currentResults.length - 1));
       }
-      if (e.key === "ArrowUp" && results.length > 0) {
+      if (e.key === "ArrowUp" && currentResults.length > 0) {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
       }
-      if (e.key === "Enter" && results.length > 0 && playingId === null) {
+      if (e.key === "Enter" && currentResults.length > 0 && currentPlayingId === null) {
         e.preventDefault();
-        handlePlay(results[selectedIndex]);
+        handlePlay(currentResults[currentIndex]);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, results, selectedIndex, playingId, close, openPanel, handlePlay]);
+  }, [close, openPanel, handlePlay]);
 
   useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
@@ -144,8 +166,6 @@ export default function SearchBar({ onPlay }) {
         title={`ค้นหาเพลง (หรือกด ${HOTKEY.toUpperCase()})`}
         whileTap={{ scale: 0.82 }}
         whileHover={{ scale: 1.08 }}
-        animate={open ? { scale: [1, 1.15, 1] } : { scale: 1 }}
-        transition={{ duration: 0.28, ease: "easeOut" }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -159,29 +179,36 @@ export default function SearchBar({ onPlay }) {
             className="search-full"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, transition: { duration: 0.25, ease: EASE } }}
+            transition={{ duration: 0.28, ease: EASE }}
           >
             <motion.div
               className="search-full-bg"
-              initial={{ backdropFilter: "blur(0px)" }}
-              animate={{ backdropFilter: "blur(30px)" }}
-              exit={{ backdropFilter: "blur(0px)" }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ backdropFilter: "blur(0px)", opacity: 0 }}
+              animate={{ backdropFilter: "blur(30px)", opacity: 1 }}
+              exit={{ backdropFilter: "blur(0px)", opacity: 0 }}
+              transition={{ duration: 0.4, ease: EASE }}
             />
 
             <motion.div
               className="search-full-inner"
-              initial={{ opacity: 0, scale: 1.06, filter: "blur(8px)" }}
-              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)" }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              variants={innerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
             >
-              <button className="search-close-btn" onClick={close} title="ปิด (Esc)">
+              <motion.button
+                className="search-close-btn"
+                onClick={close}
+                title="ปิด (Esc)"
+                variants={sectionVariants}
+                whileHover={{ scale: 1.1, rotate: 90 }}
+                whileTap={{ scale: 0.85 }}
+              >
                 ✕
-              </button>
+              </motion.button>
 
-              <div className="search-header">
+              <motion.div className="search-header" variants={sectionVariants}>
                 <svg className="search-header-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
@@ -194,13 +221,19 @@ export default function SearchBar({ onPlay }) {
                   onChange={handleInput}
                 />
                 {query && (
-                  <button className="search-clear-btn" onClick={() => { setQuery(""); setResults([]); }}>
+                  <motion.button
+                    className="search-clear-btn"
+                    onClick={() => { setQuery(""); setResults([]); }}
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                  >
                     ✕
-                  </button>
+                  </motion.button>
                 )}
-              </div>
+              </motion.div>
 
-              <div className="search-body">
+              <motion.div className="search-body" variants={sectionVariants}>
                 {loading && (
                   <ul className="search-skeleton-list">
                     {Array.from({ length: 8 }).map((_, i) => (
@@ -228,7 +261,7 @@ export default function SearchBar({ onPlay }) {
                 )}
 
                 {!loading && results.length === 0 && !query && (
-                  <motion.div className="search-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <motion.div className="search-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
                     พิมพ์ชื่อเพลงหรือศิลปินที่ต้องการค้นหา
                     <span className="search-hint-key">↑ ↓ เลื่อนเลือก · Enter เล่นเพลง · Esc ปิด</span>
                   </motion.div>
@@ -285,7 +318,7 @@ export default function SearchBar({ onPlay }) {
                     </AnimatePresence>
                   </ul>
                 )}
-              </div>
+              </motion.div>
             </motion.div>
           </motion.div>
         )}
