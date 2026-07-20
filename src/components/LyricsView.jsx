@@ -1,73 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useRef, useCallback, useState } from "react";
-
-/* ─────────── Custom smooth scroll (spring physics, iOS-style) ─────────── */
-function useSmoothScroll(containerRef) {
-  const targetScrollTop = useRef(0);
-  const currentScrollTop = useRef(0);
-  const velocity = useRef(0);
-  const rafId = useRef(null);
-  const isAnimating = useRef(false);
-  const lastTime = useRef(0);
-
-  // Smooth, slightly-overdamped spring — glides instead of snapping, iOS momentum feel
-  const STIFFNESS = 150;
-  const DAMPING = 28;
-  const MASS = 1.1;
-
-  const animateScroll = useCallback((time) => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    if (!lastTime.current) lastTime.current = time;
-    let dt = (time - lastTime.current) / 1000;
-    lastTime.current = time;
-    dt = Math.min(dt, 1 / 30); // clamp so tab-switches / frame drops don't jolt the spring
-
-    const displacement = currentScrollTop.current - targetScrollTop.current;
-    const springForce = -STIFFNESS * displacement;
-    const dampingForce = -DAMPING * velocity.current;
-    const acceleration = (springForce + dampingForce) / MASS;
-
-    velocity.current += acceleration * dt;
-    currentScrollTop.current += velocity.current * dt;
-    container.scrollTop = currentScrollTop.current;
-
-    const settled = Math.abs(displacement) < 0.3 && Math.abs(velocity.current) < 0.3;
-    if (settled) {
-      container.scrollTop = targetScrollTop.current;
-      currentScrollTop.current = targetScrollTop.current;
-      velocity.current = 0;
-      isAnimating.current = false;
-      lastTime.current = 0;
-      return;
-    }
-    rafId.current = requestAnimationFrame(animateScroll);
-  }, [containerRef]);
-
-  const scrollTo = useCallback((top) => {
-    const container = containerRef.current;
-    if (!container) return;
-    targetScrollTop.current = Math.max(0, top);
-    currentScrollTop.current = container.scrollTop;
-    if (!isAnimating.current) {
-      isAnimating.current = true;
-      lastTime.current = 0;
-      rafId.current = requestAnimationFrame(animateScroll);
-    }
-  }, [animateScroll, containerRef]);
-
-  const stop = useCallback(() => {
-    if (rafId.current) cancelAnimationFrame(rafId.current);
-    isAnimating.current = false;
-    velocity.current = 0;
-    lastTime.current = 0;
-    const container = containerRef.current;
-    if (container) currentScrollTop.current = container.scrollTop;
-  }, [containerRef]);
-
-  return { scrollTo, stop };
-}
+import { useEffect, useLayoutEffect, useRef, useCallback, useState } from "react";
 
 /* ─────────── No-lyrics artwork ─────────── */
 function NoLyricsArt({ reason, animSpeed = 1 }) {
@@ -167,59 +99,73 @@ export default function LyricsView({
   const lineRefs = useRef({});
   const isUserScrolling = useRef(false);
   const userScrollTimer = useRef(null);
-  const lastAutoScrollLine = useRef(-1);
-  const currentIndexRef = useRef(currentLineIndex);
+  const lastTouchY = useRef(0);
   const prevLineIndexRef = useRef(currentLineIndex);
+
+  // `shift` is the single translateY (px) that, applied to every line, keeps the
+  // active line centered in the viewport. Every line receives this exact same
+  // number — but each <motion.p> animates to it independently with its own
+  // spring + delay, so the rows don't move as one rigid block. Instead they
+  // "unstick" one after another, top row first, like cars pulling away in a
+  // traffic jam, and eventually converge on the same resting position.
+  const [shift, setShift] = useState(0);
+  const [manualOffset, setManualOffset] = useState(0);
   const [viewMode, setViewMode] = useState("lyrics");
 
   const dur = (b) => b / animSpeed;
-  const { scrollTo, stop } = useSmoothScroll(containerRef);
 
-  useEffect(() => { currentIndexRef.current = currentLineIndex; }, [currentLineIndex]);
-
-  const scrollToLine = useCallback((index, retryCount = 0) => {
-    if (isUserScrolling.current) return;
-    if (index < 0) return;
-    if (index === lastAutoScrollLine.current && retryCount === 0) return;
+  const measureShift = useCallback((retryCount = 0) => {
     const container = containerRef.current;
-    const lineEl = lineRefs.current[index];
+    const lineEl = lineRefs.current[currentLineIndex];
+    if (currentLineIndex < 0) return;
     if (!container || !lineEl) {
-      if (retryCount < 60) requestAnimationFrame(() => scrollToLine(index, retryCount + 1));
+      if (retryCount < 60) requestAnimationFrame(() => measureShift(retryCount + 1));
       return;
     }
-    const containerRect = container.getBoundingClientRect();
-    const lineRect = lineEl.getBoundingClientRect();
-    const targetTop = container.scrollTop + (lineRect.top - containerRect.top) - container.clientHeight / 2 + lineRect.height / 2;
-    scrollTo(targetTop);
-    lastAutoScrollLine.current = index;
-  }, [scrollTo]);
+    const target = container.clientHeight / 2 - (lineEl.offsetTop + lineEl.offsetHeight / 2);
+    setShift(target);
+  }, [currentLineIndex]);
 
-  useEffect(() => {
-    if (currentLineIndex >= 0) scrollToLine(currentLineIndex);
-    // track direction/step so we can stagger the line-by-line cascade
+  useLayoutEffect(() => {
+    measureShift();
     prevLineIndexRef.current = currentLineIndex;
-  }, [currentLineIndex, scrollToLine]);
+  }, [currentLineIndex, measureShift]);
 
-  const handleUserScroll = useCallback(() => {
-    stop();
+  const handleUserScroll = useCallback((deltaY) => {
     isUserScrolling.current = true;
+    setManualOffset((prev) => {
+      const next = prev - deltaY;
+      return Math.max(-4000, Math.min(4000, next));
+    });
     clearTimeout(userScrollTimer.current);
     userScrollTimer.current = setTimeout(() => {
       isUserScrolling.current = false;
-      lastAutoScrollLine.current = -1;
-      scrollToLine(currentIndexRef.current);
+      setManualOffset(0);
     }, 3000);
-  }, [scrollToLine, stop]);
+  }, []);
+
+  const onWheel = useCallback((e) => {
+    handleUserScroll(e.deltaY);
+  }, [handleUserScroll]);
+
+  const onTouchStart = useCallback((e) => {
+    lastTouchY.current = e.touches[0].clientY;
+  }, []);
+
+  const onTouchMove = useCallback((e) => {
+    const y = e.touches[0].clientY;
+    const deltaY = lastTouchY.current - y; // finger up = content should scroll down
+    lastTouchY.current = y;
+    handleUserScroll(deltaY);
+  }, [handleUserScroll]);
 
   useEffect(() => {
     lineRefs.current = {};
-    lastAutoScrollLine.current = -1;
     isUserScrolling.current = false;
     clearTimeout(userScrollTimer.current);
-    const container = containerRef.current;
-    if (container) container.scrollTop = 0;
-    scrollTo(0);
-  }, [trackId, scrollTo]);
+    setManualOffset(0);
+    setShift(0);
+  }, [trackId]);
 
   const hasContent = status === "found" && (synced || plain);
 
@@ -266,6 +212,13 @@ export default function LyricsView({
       </AnimatePresence>
     );
   }
+
+  const totalShift = shift + manualOffset;
+  const prevIndex = prevLineIndexRef.current;
+  // baseline = the row nearest the top of the "moving zone" between where we were
+  // and where we're going — everything from there downward gets an increasing
+  // delay, so the cascade always reads top-to-bottom regardless of jump size.
+  const baseline = Math.max(0, Math.min(currentLineIndex, prevIndex) - 1);
 
   return (
     <div className="lyrics-view-root">
@@ -328,14 +281,16 @@ export default function LyricsView({
               <div
                 className="lyrics-scroll"
                 ref={containerRef}
-                onWheel={handleUserScroll}
-                onTouchMove={handleUserScroll}
-                onTouchStart={handleUserScroll}
+                onWheel={onWheel}
+                onTouchMove={onTouchMove}
+                onTouchStart={onTouchStart}
+                style={{ overflow: "hidden", position: "relative", height: "100%" }}
               >
                 <AnimatePresence mode="wait">
                   <motion.div key={trackId} className="lyrics-lines"
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     transition={{ duration: dur(0.4) }}
+                    style={{ position: "relative" }}
                   >
                     <div className="lyrics-spacer" />
 
@@ -373,32 +328,30 @@ export default function LyricsView({
                       const distance = Math.abs(i - currentLineIndex);
                       const isActive = i === currentLineIndex;
                       const isPast = i < currentLineIndex;
-                      // Stagger each line's transition by its distance from the active
-                      // line so the whole block advances one row at a time, cascading
-                      // outward and settling smoothly — the "iOS picker" feel without
-                      // being snappy about it.
-                      const cascadeDelay = Math.min(distance * 0.045, 0.32);
+
+                      // Sequential, top-to-bottom stagger: row `baseline` moves first,
+                      // the next row follows shortly after, and so on — the "traffic
+                      // easing forward one car at a time" feel, instead of every row
+                      // reacting in perfect unison.
+                      const order = Math.max(0, i - baseline);
+                      const cascadeDelay = Math.min(order * 0.045, 0.4);
+
                       return (
                         <motion.p
                           key={`${trackId}-${i}`}
-                          layout
                           ref={(el) => { if (el) lineRefs.current[i] = el; }}
                           className={`lyric-line ${isActive ? "active" : ""}`}
                           initial={false}
                           animate={{
+                            y: totalShift,
                             opacity: isActive ? 1 : isPast ? Math.max(0.12, 0.45 - distance * 0.1) : Math.max(0.18, 0.55 - distance * 0.12),
                             scale: isActive ? 1.06 : Math.max(0.88, 1 - distance * 0.025),
                             filter: isActive ? "blur(0px)" : `blur(${Math.min(distance * 0.6, 3)}px)`,
-                            x: isActive ? 0 : isPast ? -6 : 4,
                             color: isActive ? "#ffffff" : "rgba(255,255,255,0.45)",
                           }}
                           transition={{
-                            type: "spring",
-                            stiffness: 200 * animSpeed,
-                            damping: 32,
-                            mass: 1,
-                            delay: cascadeDelay,
-                            layout: { type: "spring", stiffness: 190 * animSpeed, damping: 34, mass: 1, delay: cascadeDelay },
+                            y: { type: "spring", stiffness: 130 * animSpeed, damping: 18, mass: 1, delay: cascadeDelay },
+                            default: { type: "spring", stiffness: 200 * animSpeed, damping: 32, mass: 1, delay: cascadeDelay },
                           }}
                           style={{ transformOrigin: "left center" }}
                         >
