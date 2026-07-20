@@ -1,26 +1,47 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useRef, useCallback, useState } from "react";
 
-/* ─────────── Custom smooth scroll ─────────── */
+/* ─────────── Custom smooth scroll (spring physics, iOS-style) ─────────── */
 function useSmoothScroll(containerRef) {
   const targetScrollTop = useRef(0);
   const currentScrollTop = useRef(0);
+  const velocity = useRef(0);
   const rafId = useRef(null);
   const isAnimating = useRef(false);
+  const lastTime = useRef(0);
 
-  const animateScroll = useCallback(() => {
+  // Critically-damped-ish spring tuned to feel like iOS momentum scrolling
+  const STIFFNESS = 210;
+  const DAMPING = 26;
+  const MASS = 1;
+
+  const animateScroll = useCallback((time) => {
     const container = containerRef.current;
     if (!container) return;
-    const diff = targetScrollTop.current - currentScrollTop.current;
-    if (Math.abs(diff) < 0.5) {
+
+    if (!lastTime.current) lastTime.current = time;
+    let dt = (time - lastTime.current) / 1000;
+    lastTime.current = time;
+    dt = Math.min(dt, 1 / 30); // clamp so tab-switches / frame drops don't jolt the spring
+
+    const displacement = currentScrollTop.current - targetScrollTop.current;
+    const springForce = -STIFFNESS * displacement;
+    const dampingForce = -DAMPING * velocity.current;
+    const acceleration = (springForce + dampingForce) / MASS;
+
+    velocity.current += acceleration * dt;
+    currentScrollTop.current += velocity.current * dt;
+    container.scrollTop = currentScrollTop.current;
+
+    const settled = Math.abs(displacement) < 0.3 && Math.abs(velocity.current) < 0.3;
+    if (settled) {
       container.scrollTop = targetScrollTop.current;
       currentScrollTop.current = targetScrollTop.current;
+      velocity.current = 0;
       isAnimating.current = false;
+      lastTime.current = 0;
       return;
     }
-    const step = diff * 0.085;
-    currentScrollTop.current += step;
-    container.scrollTop = currentScrollTop.current;
     rafId.current = requestAnimationFrame(animateScroll);
   }, [containerRef]);
 
@@ -31,6 +52,7 @@ function useSmoothScroll(containerRef) {
     currentScrollTop.current = container.scrollTop;
     if (!isAnimating.current) {
       isAnimating.current = true;
+      lastTime.current = 0;
       rafId.current = requestAnimationFrame(animateScroll);
     }
   }, [animateScroll, containerRef]);
@@ -38,6 +60,8 @@ function useSmoothScroll(containerRef) {
   const stop = useCallback(() => {
     if (rafId.current) cancelAnimationFrame(rafId.current);
     isAnimating.current = false;
+    velocity.current = 0;
+    lastTime.current = 0;
     const container = containerRef.current;
     if (container) currentScrollTop.current = container.scrollTop;
   }, [containerRef]);
@@ -145,6 +169,7 @@ export default function LyricsView({
   const userScrollTimer = useRef(null);
   const lastAutoScrollLine = useRef(-1);
   const currentIndexRef = useRef(currentLineIndex);
+  const prevLineIndexRef = useRef(currentLineIndex);
   const [viewMode, setViewMode] = useState("lyrics");
 
   const dur = (b) => b / animSpeed;
@@ -171,6 +196,8 @@ export default function LyricsView({
 
   useEffect(() => {
     if (currentLineIndex >= 0) scrollToLine(currentLineIndex);
+    // track direction/step so we can stagger the line-by-line cascade
+    prevLineIndexRef.current = currentLineIndex;
   }, [currentLineIndex, scrollToLine]);
 
   const handleUserScroll = useCallback(() => {
@@ -315,9 +342,14 @@ export default function LyricsView({
                       const distance = Math.abs(i - currentLineIndex);
                       const isActive = i === currentLineIndex;
                       const isPast = i < currentLineIndex;
+                      // Stagger each line's transition by its distance from the active
+                      // line so the whole block advances one row at a time, cascading
+                      // outward — the "iOS picker / Apple Music" line-by-line feel.
+                      const cascadeDelay = Math.min(distance * 0.028, 0.18);
                       return (
                         <motion.p
                           key={`${trackId}-${i}`}
+                          layout
                           ref={(el) => { if (el) lineRefs.current[i] = el; }}
                           className={`lyric-line ${isActive ? "active" : ""}`}
                           initial={false}
@@ -328,7 +360,14 @@ export default function LyricsView({
                             x: isActive ? 0 : isPast ? -6 : 4,
                             color: isActive ? "#ffffff" : "rgba(255,255,255,0.45)",
                           }}
-                          transition={{ type: "spring", stiffness: 90 * animSpeed, damping: 20, mass: 1.1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 320 * animSpeed,
+                            damping: 30,
+                            mass: 0.7,
+                            delay: cascadeDelay,
+                            layout: { type: "spring", stiffness: 300 * animSpeed, damping: 32, mass: 0.8, delay: cascadeDelay },
+                          }}
                           style={{ transformOrigin: "left center" }}
                         >
                           {line.text || "\u00A0"}
@@ -395,7 +434,7 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
             initial={{ opacity: 0, y: 16, filter: "blur(6px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -16, scale: 0.93, filter: "blur(6px)" }}
-            transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 24 }}
+            transition={{ type: "spring", stiffness: 260 * animSpeed, damping: 28, mass: 0.7 }}
           >{prev.text}</motion.p>
         )}
       </AnimatePresence>
@@ -407,7 +446,7 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
           initial={{ opacity: 0, scale: 0.82, y: 28, filter: "blur(12px)", letterSpacing: "0.1em" }}
           animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)", letterSpacing: "-0.03em" }}
           exit={{ opacity: 0, scale: 1.1, y: -28, filter: "blur(12px)" }}
-          transition={{ type: "spring", stiffness: 200 * animSpeed, damping: 26, mass: 0.9 }}
+          transition={{ type: "spring", stiffness: 300 * animSpeed, damping: 30, mass: 0.75 }}
         >
           {curr?.text || "\u00A0"}
         </motion.p>
@@ -419,7 +458,7 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
             initial={{ opacity: 0, y: -16, filter: "blur(6px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: 16, scale: 0.93, filter: "blur(6px)" }}
-            transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 24 }}
+            transition={{ type: "spring", stiffness: 260 * animSpeed, damping: 28, mass: 0.7, delay: 0.02 }}
           >{next.text}</motion.p>
         )}
       </AnimatePresence>
@@ -430,7 +469,7 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: dur(0.3), ease: "easeOut" }}
+            transition={{ duration: dur(0.3), ease: "easeOut", delay: 0.04 }}
           >{next2.text}</motion.p>
         )}
       </AnimatePresence>
