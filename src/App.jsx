@@ -9,7 +9,7 @@ import AlbumArt from "./components/AlbumArt";
 import TrackInfo from "./components/TrackInfo";
 import LyricsView from "./components/LyricsView";
 import LyricsTicker from "./components/LyricsTicker";
-import LoginScreen from "./components/LoginScreen";
+import LoginScreen from "./components/index";
 import AuthCallback from "./components/AuthCallback";
 import ProgressBar from "./components/ProgressBar";
 import SearchBar from "./components/SearchBar";
