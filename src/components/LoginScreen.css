@@ -537,11 +537,10 @@
    ──────────────────────────────────────── */
 .lv2-about {
   position: relative;
-  min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 90px 5vw;
+  padding: 80px 5vw 100px;
 }
 .lv2-about-inner {
   width: 100%;
