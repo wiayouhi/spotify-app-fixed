@@ -6,7 +6,7 @@ async function searchSpotify(query) {
   const token = await getValidAccessToken();
   if (!token) return [];
   const res = await fetch(
-    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=8`,
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!res.ok) return [];
@@ -36,7 +36,7 @@ async function playTrack(uri) {
   return true;
 }
 
-const panelSpring = { type: "spring", stiffness: 320, damping: 30, mass: 0.9 };
+const HOTKEY = "i"; // secret key to open fullscreen search
 const cursorSpring = { type: "spring", stiffness: 500, damping: 40 };
 
 export default function SearchBar({ onPlay }) {
@@ -76,7 +76,7 @@ export default function SearchBar({ onPlay }) {
     [onPlay, close]
   );
 
-  // secret key: press "f" anywhere (not while typing) to open the spotlight search.
+  // secret key: press "i" anywhere (not while typing) to open fullscreen search.
   // once open, arrow keys move the selection and Enter plays it.
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -84,7 +84,7 @@ export default function SearchBar({ onPlay }) {
       const isTyping = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
 
       if (!open) {
-        if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "f") {
+        if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === HOTKEY) {
           e.preventDefault();
           openPanel();
         }
@@ -113,7 +113,6 @@ export default function SearchBar({ onPlay }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, results, selectedIndex, playingId, close, openPanel, handlePlay]);
 
-  // keep the selected row scrolled into view as arrow keys move it
   useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
@@ -142,9 +141,11 @@ export default function SearchBar({ onPlay }) {
       <motion.button
         className="search-btn"
         onClick={() => (open ? close() : openPanel())}
-        title="ค้นหาเพลง (หรือกด F)"
-        whileTap={{ scale: 0.88 }}
-        whileHover={{ scale: 1.06 }}
+        title={`ค้นหาเพลง (หรือกด ${HOTKEY.toUpperCase()})`}
+        whileTap={{ scale: 0.82 }}
+        whileHover={{ scale: 1.08 }}
+        animate={open ? { scale: [1, 1.15, 1] } : { scale: 1 }}
+        transition={{ duration: 0.28, ease: "easeOut" }}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -153,28 +154,35 @@ export default function SearchBar({ onPlay }) {
 
       <AnimatePresence>
         {open && (
-          <>
+          <motion.div
+            key="fullscreen"
+            className="search-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
             <motion.div
-              key="backdrop"
-              className="search-backdrop"
-              initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-              animate={{ opacity: 1, backdropFilter: "blur(20px)" }}
-              exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+              className="search-full-bg"
+              initial={{ backdropFilter: "blur(0px)" }}
+              animate={{ backdropFilter: "blur(30px)" }}
+              exit={{ backdropFilter: "blur(0px)" }}
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              onClick={close}
             />
 
             <motion.div
-              key="panel"
-              className="search-panel"
-              initial={{ opacity: 0, scale: 0.92, y: 24 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.94, y: 16 }}
-              transition={panelSpring}
-              onClick={(e) => e.stopPropagation()}
+              className="search-full-inner"
+              initial={{ opacity: 0, scale: 1.06, filter: "blur(8px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.97, filter: "blur(6px)" }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
+              <button className="search-close-btn" onClick={close} title="ปิด (Esc)">
+                ✕
+              </button>
+
               <div className="search-header">
-                <svg className="search-header-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg className="search-header-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
                 <input
@@ -195,13 +203,13 @@ export default function SearchBar({ onPlay }) {
               <div className="search-body">
                 {loading && (
                   <ul className="search-skeleton-list">
-                    {Array.from({ length: 6 }).map((_, i) => (
+                    {Array.from({ length: 8 }).map((_, i) => (
                       <motion.li
                         key={i}
                         className="search-skeleton-item"
-                        initial={{ opacity: 0, y: 6 }}
+                        initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }}
+                        transition={{ delay: i * 0.04 }}
                       >
                         <span className="search-skeleton-art" />
                         <span className="search-skeleton-lines">
@@ -239,15 +247,16 @@ export default function SearchBar({ onPlay }) {
                             layout
                             key={t.id}
                             className={`search-result-item${isThisPlaying ? " search-result-item--playing" : ""}`}
-                            initial={{ opacity: 0, y: 10 }}
+                            initial={{ opacity: 0, y: 12 }}
                             animate={{
                               opacity: isAnyPlaying && !isThisPlaying ? 0.35 : 1,
                               y: 0,
                             }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ ...panelSpring, delay: isAnyPlaying ? 0 : i * 0.035 }}
+                            exit={{ opacity: 0, scale: 0.96 }}
+                            transition={{ type: "spring", stiffness: 320, damping: 30, delay: isAnyPlaying ? 0 : i * 0.03 }}
                             onMouseEnter={() => setSelectedIndex(i)}
                             onClick={() => !isAnyPlaying && handlePlay(t)}
+                            whileTap={{ scale: 0.98 }}
                           >
                             {isSelected && !isAnyPlaying && (
                               <motion.div layoutId="search-cursor" className="search-cursor" transition={cursorSpring} />
@@ -278,7 +287,7 @@ export default function SearchBar({ onPlay }) {
                 )}
               </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -291,109 +300,118 @@ export default function SearchBar({ onPlay }) {
           background: rgba(255,255,255,0.08); color: #fff; cursor: pointer;
         }
 
-        .search-backdrop {
-          position: fixed; inset: 0; z-index: 40;
-          background: rgba(6,6,8,0.5);
+        .search-full {
+          position: fixed; inset: 0; z-index: 60;
+          display: flex; align-items: center; justify-content: center;
         }
 
-        .search-panel {
-          position: fixed; z-index: 50;
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
-          width: min(600px, 92vw);
-          max-height: min(64vh, 600px);
-          display: flex; flex-direction: column;
-          background: rgba(22,22,26,0.5);
-          border: 1px solid rgba(255,255,255,0.12);
-          border-radius: 20px;
-          backdrop-filter: blur(26px) saturate(180%);
-          -webkit-backdrop-filter: blur(26px) saturate(180%);
-          box-shadow: 0 30px 90px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
-          overflow: hidden;
+        .search-full-bg {
+          position: absolute; inset: 0;
+          background: radial-gradient(circle at 50% 20%, rgba(29,185,84,0.14), rgba(6,6,8,0.88) 60%);
         }
+
+        .search-full-inner {
+          position: relative; z-index: 1;
+          width: 100%; height: 100%;
+          display: flex; flex-direction: column; align-items: center;
+          padding: 8vh 20px 6vh;
+        }
+
+        .search-close-btn {
+          position: absolute; top: 22px; right: 26px;
+          width: 38px; height: 38px; border-radius: 50%; border: none;
+          background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.8);
+          font-size: 15px; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .search-close-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
 
         .search-header {
-          display: flex; align-items: center; gap: 12px;
-          padding: 18px 20px;
-          border-bottom: 1px solid rgba(255,255,255,0.08);
+          width: 100%; max-width: 680px;
+          display: flex; align-items: center; gap: 14px;
+          padding: 0 8px 20px;
+          border-bottom: 1px solid rgba(255,255,255,0.12);
           flex-shrink: 0;
         }
 
-        .search-header-icon { color: rgba(255,255,255,0.45); flex-shrink: 0; }
+        .search-header-icon { color: rgba(255,255,255,0.5); flex-shrink: 0; }
 
         .search-input {
           flex: 1; background: none; border: none; outline: none;
-          color: #fff; font-size: 19px;
+          color: #fff; font-size: 26px; font-weight: 500;
         }
-        .search-input::placeholder { color: rgba(255,255,255,0.4); }
+        .search-input::placeholder { color: rgba(255,255,255,0.35); }
 
         .search-clear-btn {
           background: rgba(255,255,255,0.08); border: none; color: rgba(255,255,255,0.7);
-          width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+          width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
           display: flex; align-items: center; justify-content: center; flex-shrink: 0;
         }
         .search-clear-btn:hover { background: rgba(255,255,255,0.16); color: #fff; }
 
-        .search-body { overflow-y: auto; padding: 10px; }
+        .search-body {
+          width: 100%; max-width: 680px;
+          flex: 1; overflow-y: auto; margin-top: 18px; padding: 0 4px;
+        }
 
-        .search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+        .search-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 
         .search-result-item {
           position: relative;
-          border-radius: 12px; cursor: pointer;
+          border-radius: 14px; cursor: pointer;
         }
 
         .search-cursor {
           position: absolute; inset: 0;
           background: rgba(29,185,84,0.16);
-          border: 1px solid rgba(29,185,84,0.35);
-          border-radius: 12px;
+          border: 1px solid rgba(29,185,84,0.4);
+          border-radius: 14px;
         }
 
         .search-result-content {
           position: relative; z-index: 1;
-          display: flex; align-items: center; gap: 12px;
-          padding: 9px 10px;
+          display: flex; align-items: center; gap: 14px;
+          padding: 11px 12px;
         }
 
-        .search-result-item--playing .search-result-content { background: rgba(29,185,84,0.12); border-radius: 12px; }
+        .search-result-item--playing .search-result-content { background: rgba(29,185,84,0.12); border-radius: 14px; }
 
-        .search-result-art { width: 42px; height: 42px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+        .search-result-art { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
         .search-result-info { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-        .search-result-name { color: #fff; font-size: 14.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .search-result-artist { color: rgba(255,255,255,0.55); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .search-result-name { color: #fff; font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .search-result-artist { color: rgba(255,255,255,0.55); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .search-play-btn {
-          width: 24px; height: 24px; flex-shrink: 0;
+          width: 26px; height: 26px; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          color: rgba(255,255,255,0.7); font-size: 11px;
+          color: rgba(255,255,255,0.7); font-size: 12px;
         }
         .search-spinner {
-          width: 15px; height: 15px; border-radius: 50%;
+          width: 16px; height: 16px; border-radius: 50%;
           border: 2px solid rgba(255,255,255,0.25); border-top-color: #1DB954;
           display: inline-block;
         }
 
         .search-empty, .search-hint {
-          padding: 40px 20px; text-align: center; color: rgba(255,255,255,0.5); font-size: 14px;
+          padding: 60px 20px; text-align: center; color: rgba(255,255,255,0.5); font-size: 15px;
         }
         .search-hint-key {
-          display: block; margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.3);
+          display: block; margin-top: 10px; font-size: 13px; color: rgba(255,255,255,0.32);
         }
 
-        .search-skeleton-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-        .search-skeleton-item { display: flex; align-items: center; gap: 12px; padding: 9px 10px; }
+        .search-skeleton-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .search-skeleton-item { display: flex; align-items: center; gap: 14px; padding: 11px 12px; }
         .search-skeleton-art, .search-skeleton-line {
-          border-radius: 7px;
+          border-radius: 8px;
           background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.14) 37%, rgba(255,255,255,0.06) 63%);
           background-size: 400% 100%;
           animation: search-shimmer 1.4s ease infinite;
         }
-        .search-skeleton-art { width: 42px; height: 42px; flex-shrink: 0; }
-        .search-skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
-        .search-skeleton-line { height: 10px; }
-        .search-skeleton-line--wide { width: 70%; }
-        .search-skeleton-line--narrow { width: 40%; }
+        .search-skeleton-art { width: 48px; height: 48px; flex-shrink: 0; }
+        .search-skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+        .search-skeleton-line { height: 11px; }
+        .search-skeleton-line--wide { width: 60%; }
+        .search-skeleton-line--narrow { width: 35%; }
 
         @keyframes search-shimmer {
           0% { background-position: 100% 0; }
