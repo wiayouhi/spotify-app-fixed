@@ -10,10 +10,10 @@ function useSmoothScroll(containerRef) {
   const isAnimating = useRef(false);
   const lastTime = useRef(0);
 
-  // Critically-damped-ish spring tuned to feel like iOS momentum scrolling
-  const STIFFNESS = 210;
-  const DAMPING = 26;
-  const MASS = 1;
+  // Smooth, slightly-overdamped spring — glides instead of snapping, iOS momentum feel
+  const STIFFNESS = 150;
+  const DAMPING = 28;
+  const MASS = 1.1;
 
   const animateScroll = useCallback((time) => {
     const container = containerRef.current;
@@ -161,7 +161,7 @@ function NoLyricsArt({ reason, animSpeed = 1 }) {
 /* ─────────── Main LyricsView ─────────── */
 export default function LyricsView({
   status, synced, plain, currentLineIndex, trackId,
-  showPanel = true, animSpeed = 1,
+  showPanel = true, animSpeed = 1, songEnded = false,
 }) {
   const containerRef = useRef(null);
   const lineRefs = useRef({});
@@ -314,7 +314,7 @@ export default function LyricsView({
             exit={{ opacity: 0, scale: 1.06, filter: "blur(16px)", y: -30 }}
             transition={{ duration: dur(0.55), ease: [0.16, 1, 0.3, 1] }}
           >
-            <FullTimeDisplay synced={synced} currentLineIndex={currentLineIndex} trackId={trackId} animSpeed={animSpeed} />
+            <FullTimeDisplay synced={synced} currentLineIndex={currentLineIndex} trackId={trackId} animSpeed={animSpeed} songEnded={songEnded} />
           </motion.div>
         ) : (
           <motion.div key="lyrics" className="lyrics-mode-wrap"
@@ -338,14 +338,46 @@ export default function LyricsView({
                     transition={{ duration: dur(0.4) }}
                   >
                     <div className="lyrics-spacer" />
+
+                    {/* Intro — shown before the first line has started */}
+                    <AnimatePresence>
+                      {currentLineIndex === -1 && !songEnded && (
+                        <motion.div
+                          key="lyrics-intro"
+                          className="lyrics-intro"
+                          initial={{ opacity: 0, y: 24, scale: 0.9, filter: "blur(12px)" }}
+                          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                          exit={{ opacity: 0, y: -18, scale: 0.94, filter: "blur(8px)" }}
+                          transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 26, mass: 1 }}
+                          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 0" }}
+                        >
+                          <div className="lyrics-intro-dots" style={{ display: "flex", gap: 8 }}>
+                            {[0, 1, 2].map((i) => (
+                              <motion.span
+                                key={i}
+                                className="lyrics-intro-dot"
+                                animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.15, 0.8] }}
+                                transition={{ duration: dur(1.4), repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
+                                style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.6)" }}
+                              />
+                            ))}
+                          </div>
+                          <span className="lyrics-intro-text" style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", letterSpacing: "0.02em" }}>
+                            เพลงกำลังจะเริ่ม
+                          </span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     {synced.map((line, i) => {
                       const distance = Math.abs(i - currentLineIndex);
                       const isActive = i === currentLineIndex;
                       const isPast = i < currentLineIndex;
                       // Stagger each line's transition by its distance from the active
                       // line so the whole block advances one row at a time, cascading
-                      // outward — the "iOS picker / Apple Music" line-by-line feel.
-                      const cascadeDelay = Math.min(distance * 0.028, 0.18);
+                      // outward and settling smoothly — the "iOS picker" feel without
+                      // being snappy about it.
+                      const cascadeDelay = Math.min(distance * 0.045, 0.32);
                       return (
                         <motion.p
                           key={`${trackId}-${i}`}
@@ -362,11 +394,11 @@ export default function LyricsView({
                           }}
                           transition={{
                             type: "spring",
-                            stiffness: 320 * animSpeed,
-                            damping: 30,
-                            mass: 0.7,
+                            stiffness: 200 * animSpeed,
+                            damping: 32,
+                            mass: 1,
                             delay: cascadeDelay,
-                            layout: { type: "spring", stiffness: 300 * animSpeed, damping: 32, mass: 0.8, delay: cascadeDelay },
+                            layout: { type: "spring", stiffness: 190 * animSpeed, damping: 34, mass: 1, delay: cascadeDelay },
                           }}
                           style={{ transformOrigin: "left center" }}
                         >
@@ -374,6 +406,36 @@ export default function LyricsView({
                         </motion.p>
                       );
                     })}
+
+                    {/* Outro — shown once the song/lyrics have finished */}
+                    <AnimatePresence>
+                      {songEnded && (
+                        <motion.div
+                          key="lyrics-outro"
+                          className="lyrics-outro"
+                          initial={{ opacity: 0, y: 24, scale: 0.9, filter: "blur(12px)" }}
+                          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                          exit={{ opacity: 0, y: -18, scale: 0.94, filter: "blur(8px)" }}
+                          transition={{ type: "spring", stiffness: 160 * animSpeed, damping: 26, mass: 1, delay: 0.1 }}
+                          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "24px 0", position: "relative" }}
+                        >
+                          <motion.div
+                            className="lyrics-outro-glow"
+                            animate={{ opacity: [0.5, 0.15, 0.5], scale: [1, 1.15, 1] }}
+                            transition={{ duration: dur(2.4), repeat: Infinity, ease: "easeInOut" }}
+                            style={{
+                              position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+                              width: 80, height: 80, borderRadius: "50%",
+                              background: "radial-gradient(circle, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 70%)",
+                            }}
+                          />
+                          <span className="lyrics-outro-text" style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", letterSpacing: "0.02em", position: "relative" }}>
+                            จบเนื้อเพลง
+                          </span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
                     <div className="lyrics-spacer" />
                   </motion.div>
                 </AnimatePresence>
@@ -400,15 +462,62 @@ export default function LyricsView({
 }
 
 /* ─────────── FullTime karaoke view ─────────── */
-function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
+function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1, songEnded = false }) {
   const curr = synced?.[currentLineIndex];
   const prev = synced?.[currentLineIndex - 1];
   const next = synced?.[currentLineIndex + 1];
   const next2 = synced?.[currentLineIndex + 2];
   const dur = (b) => b / animSpeed;
+  const isIntro = currentLineIndex === -1 && !songEnded;
 
   return (
     <div className="fulltime-display">
+      {/* Intro / outro overlay — fades the karaoke lines out and shows a status line */}
+      <AnimatePresence>
+        {(isIntro || songEnded) && (
+          <motion.div
+            key={isIntro ? "fulltime-intro" : "fulltime-outro"}
+            initial={{ opacity: 0, scale: 0.92, filter: "blur(14px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+            transition={{ type: "spring", stiffness: 150 * animSpeed, damping: 24, mass: 1 }}
+            style={{
+              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 12, zIndex: 2,
+            }}
+          >
+            {isIntro ? (
+              <div style={{ display: "flex", gap: 8 }}>
+                {[0, 1, 2].map((i) => (
+                  <motion.span key={i}
+                    animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.15, 0.8] }}
+                    transition={{ duration: dur(1.4), repeat: Infinity, delay: i * 0.22, ease: "easeInOut" }}
+                    style={{ width: 9, height: 9, borderRadius: "50%", background: "rgba(255,255,255,0.6)" }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                animate={{ opacity: [0.5, 0.15, 0.5], scale: [1, 1.15, 1] }}
+                transition={{ duration: dur(2.4), repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  width: 90, height: 90, borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 70%)",
+                }}
+              />
+            )}
+            <span style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", letterSpacing: "0.02em" }}>
+              {isIntro ? "เพลงกำลังจะเริ่ม" : "จบเนื้อเพลง"}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <motion.div
+        animate={{ opacity: isIntro || songEnded ? 0 : 1 }}
+        transition={{ duration: dur(0.4), ease: "easeOut" }}
+        style={{ display: "contents" }}
+      >
       <motion.div
         key={`glow-${currentLineIndex}`}
         className="fulltime-glow"
@@ -482,6 +591,7 @@ function FullTimeDisplay({ synced, currentLineIndex, trackId, animSpeed = 1 }) {
           />
         ))}
       </div>
+      </motion.div>
     </div>
   );
 }
