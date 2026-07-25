@@ -4,6 +4,12 @@
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
 const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || window.location.origin + window.location.pathname;
 const SCOPES = [
+  // Web Playback SDK ต้องการ 3 scope นี้ทุกครั้ง (streaming, user-read-email, user-read-private)
+  // ถ้าขาดไป SDK จะเล่นได้แค่ buffer แรกก้อนเดียว (~10 วิ) แล้วขอ license
+  // ต่อไม่ผ่าน (403) ทำให้เสียงหายไปเงียบๆ โดยไม่มี error ชัดเจน
+  "streaming",
+  "user-read-email",
+  "user-read-private",
   "user-read-currently-playing",
   "user-read-playback-state",
   "user-modify-playback-state",

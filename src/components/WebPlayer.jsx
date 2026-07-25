@@ -4,13 +4,19 @@ import { motion, AnimatePresence } from "framer-motion";
 /**
  * WebPlayer — Spotify Web Playback SDK
  *
- * Root cause ของเสียงหาย:
- * Chrome/Safari จะ auto-suspend AudioContext หลังจากไม่มี audio output ~10 วิ
- * setInterval + playSilence ไม่ work เพราะ browser ถือว่า interval callback
- * ไม่ใช่ "audio activity" พอที่จะป้องกัน suspend
+ * Root cause ที่แท้จริงของ "เล่นได้ 10 วิแล้วเสียงหาย":
+ * Access token ที่ขอมาตอน login ขาด scope ที่ Web Playback SDK ต้องใช้
+ * (streaming, user-read-email, user-read-private) — ดู src/utils/spotifyAuth.js
+ * ผลคือ SDK จะเล่น audio buffer ก้อนแรกที่โหลดมาได้ปกติ (~10 วิ) แต่พอต้องขอ
+ * license/ต่อ buffer ก้อนถัดไป คำขอจะถูกปฏิเสธ (403) แบบเงียบๆ ไม่มี error
+ * โผล่ให้เห็นชัดเจน เสียงเลยหายไปทั้งที่ progress bar ยังเดินต่อ
  *
- * วิธีแก้ที่ถูก: ต่อ OscillatorNode (volume = 0) ไว้กับ destination ตลอดเวลา
- * ทำให้ AudioContext มี active audio graph → ไม่ถูก suspend เลย
+ * แก้ที่ scope แล้วต้อง logout + login ใหม่ (token เก่าที่ไม่มี scope ที่ถูกต้อง
+ * ยังใช้ไม่ได้จนกว่าจะขอ token ใหม่)
+ *
+ * ส่วน AudioContext anchor ด้านล่างนี้ไม่ใช่สาเหตุจริงของปัญหา (Spotify SDK
+ * เล่นเสียงผ่าน audio element ของตัวเอง ไม่ผ่าน AudioContext ของหน้านี้)
+ * แต่เก็บไว้เผื่อช่วยเรื่อง tab suspend ของ browser เอง ไม่ได้ก่อให้เกิดปัญหาเพิ่ม
  */
 export default function WebPlayer({ animSpeed = 1 }) {
   const [status, setStatus] = useState("idle");
