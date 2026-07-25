@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { seekToPosition } from "../utils/spotifyApi";
+import { useDevice } from "../context/DeviceContext";
 
 function formatTime(ms) {
   if (!ms || ms < 0) return "0:00";
@@ -13,7 +14,8 @@ function formatTime(ms) {
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
   const [showRemaining, setShowRemaining] = useState(false);
   const trackRef = useRef(null);
-  
+  const { targetDeviceId } = useDevice();
+
   const progress = durationMs > 0 ? Math.min(progressMs / durationMs, 1) : 0;
   const displayTimeLeft = durationMs - progressMs;
 
@@ -22,7 +24,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
     const rect = trackRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(1, clickX / rect.width));
-    seekToPosition(percentage * durationMs);
+    seekToPosition(percentage * durationMs, targetDeviceId);
   };
 
   return (

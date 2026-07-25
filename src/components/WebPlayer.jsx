@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDevice } from "../context/DeviceContext";
 
 /**
  * WebPlayer — Spotify Web Playback SDK
@@ -23,6 +24,7 @@ export default function WebPlayer({ animSpeed = 1 }) {
   const [deviceName] = useState("Music App Browser");
   const playerRef = useRef(null);
   const deviceIdRef = useRef(null);
+  const { setWebDeviceId, setIsWebPlayerActive } = useDevice();
   const audioCtxRef = useRef(null);
   const gainRef = useRef(null);      // GainNode volume=0 ต่อไว้ตลอด
   const oscRef = useRef(null);       // OscillatorNode ที่ run ตลอด
@@ -155,15 +157,18 @@ export default function WebPlayer({ animSpeed = 1 }) {
 
       player.addListener("ready", ({ device_id }) => {
         deviceIdRef.current = device_id;
+        setWebDeviceId(device_id);
         setStatus("ready");
       });
       player.addListener("not_ready", () => {
         setStatus("idle");
+        setIsWebPlayerActive(false);
+        setWebDeviceId(null);
         stopAudioAnchor();
       });
-      player.addListener("initialization_error", () => { setStatus("error"); stopAudioAnchor(); });
-      player.addListener("authentication_error", () => { setStatus("error"); stopAudioAnchor(); });
-      player.addListener("account_error", () => { setStatus("error"); stopAudioAnchor(); });
+      player.addListener("initialization_error", () => { setStatus("error"); setIsWebPlayerActive(false); setWebDeviceId(null); stopAudioAnchor(); });
+      player.addListener("authentication_error", () => { setStatus("error"); setIsWebPlayerActive(false); setWebDeviceId(null); stopAudioAnchor(); });
+      player.addListener("account_error", () => { setStatus("error"); setIsWebPlayerActive(false); setWebDeviceId(null); stopAudioAnchor(); });
       player.addListener("player_state_changed", (state) => {
         if (state && !state.paused && !watchdogRef.current) {
           // เพลงเล่นแต่ anchor ไม่ได้ start → restart (edge case)
@@ -194,12 +199,18 @@ export default function WebPlayer({ animSpeed = 1 }) {
       playerRef.current.activateElement();
       playerRef.current.resume().catch(() => {});
     }
-    transferPlayback(deviceIdRef.current);
+    await transferPlayback(deviceIdRef.current);
+    // ตั้งให้เว็บเป็น "target device" ตอนนี้ — คำสั่งเล่น/พัก/ข้าม/ปรับเสียง/
+    // เล่นจากค้นหา ที่มาจากหน้านี้จะแนบ device_id ของเว็บไปด้วยเสมอ ทำให้เพลง
+    // ที่เลือกในเว็บเล่นต่อในเว็บจริงๆ แทนที่จะเด้งไปอุปกรณ์อื่นที่เคย active อยู่
+    setIsWebPlayerActive(true);
     setStatus("active");
   };
 
   const handleDisconnect = () => {
     stopAudioAnchor();
+    setIsWebPlayerActive(false);
+    setWebDeviceId(null);
     if (playerRef.current) {
       playerRef.current.disconnect();
       playerRef.current = null;
@@ -209,8 +220,12 @@ export default function WebPlayer({ animSpeed = 1 }) {
   };
 
   useEffect(() => {
-    return () => { stopAudioAnchor(); };
-  }, [stopAudioAnchor]);
+    return () => {
+      stopAudioAnchor();
+      setIsWebPlayerActive(false);
+      setWebDeviceId(null);
+    };
+  }, [stopAudioAnchor, setIsWebPlayerActive, setWebDeviceId]);
 
   const dur = (b) => b / animSpeed;
 

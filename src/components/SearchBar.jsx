@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getValidAccessToken } from "../utils/spotifyAuth";
+import { playTrackNow, addTrackToQueue } from "../utils/spotifyApi";
+import { useDevice } from "../context/DeviceContext";
 
 async function searchSpotify(query) {
   const token = await getValidAccessToken();
@@ -20,20 +22,6 @@ async function searchSpotify(query) {
     uri: item.uri,
     durationMs: item.duration_ms,
   }));
-}
-
-async function playTrack(uri) {
-  const token = await getValidAccessToken();
-  if (!token) return false;
-  await fetch("https://api.spotify.com/v1/me/player/play", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ uris: [uri] }),
-  });
-  return true;
 }
 
 const HOTKEY = "i"; // secret key to open fullscreen search
@@ -57,10 +45,12 @@ export default function SearchBar({ onPlay }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [playingId, setPlayingId] = useState(null);
+  const [queuedId, setQueuedId] = useState(null); // track ที่เพิ่งกด "เพิ่มในคิว" — โชว์ feedback ชั่วคราว
   const [selectedIndex, setSelectedIndex] = useState(0);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
   const itemRefs = useRef([]);
+  const { targetDeviceId } = useDevice();
 
   // mirror the latest state in refs so a *single*, never-re-subscribed
   // keydown listener can always read fresh values. Re-adding/removing the
@@ -88,14 +78,27 @@ export default function SearchBar({ onPlay }) {
     async (track) => {
       if (!track) return;
       setPlayingId(track.id);
-      await playTrack(track.uri);
+      // แนบ targetDeviceId เสมอ: ถ้าเว็บ player active อยู่ เพลงจะเล่นต่อบนเว็บ
+      // จริงๆ แทนที่จะเด้งไปเล่นบนอุปกรณ์อื่นที่เคย active ก่อนหน้า
+      await playTrackNow(track.uri, targetDeviceId);
       if (onPlay) onPlay(track);
       setTimeout(() => {
         setPlayingId(null);
         close();
       }, 350);
     },
-    [onPlay, close]
+    [onPlay, close, targetDeviceId]
+  );
+
+  const handleAddToQueue = useCallback(
+    async (e, track) => {
+      e.stopPropagation();
+      if (!track) return;
+      setQueuedId(track.id);
+      await addTrackToQueue(track.uri, targetDeviceId);
+      setTimeout(() => setQueuedId((id) => (id === track.id ? null : id)), 1200);
+    },
+    [targetDeviceId]
   );
 
   // single stable listener, attached once for the lifetime of the component
@@ -126,6 +129,11 @@ export default function SearchBar({ onPlay }) {
         e.preventDefault();
         setSelectedIndex((i) => Math.max(i - 1, 0));
       }
+      if (e.key === "Enter" && e.shiftKey && currentResults.length > 0) {
+        e.preventDefault();
+        handleAddToQueue(e, currentResults[currentIndex]);
+        return;
+      }
       if (e.key === "Enter" && currentResults.length > 0 && currentPlayingId === null) {
         e.preventDefault();
         handlePlay(currentResults[currentIndex]);
@@ -133,7 +141,7 @@ export default function SearchBar({ onPlay }) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [close, openPanel, handlePlay]);
+  }, [close, openPanel, handlePlay, handleAddToQueue]);
 
   useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
@@ -263,7 +271,7 @@ export default function SearchBar({ onPlay }) {
                 {!loading && results.length === 0 && !query && (
                   <motion.div className="search-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
                     พิมพ์ชื่อเพลงหรือศิลปินที่ต้องการค้นหา
-                    <span className="search-hint-key">↑ ↓ เลื่อนเลือก · Enter เล่นเพลง · Esc ปิด</span>
+                    <span className="search-hint-key">↑ ↓ เลื่อนเลือก · Enter เล่นทันที · Shift+Enter เพิ่มในคิว · Esc ปิด</span>
                   </motion.div>
                 )}
 
@@ -273,6 +281,7 @@ export default function SearchBar({ onPlay }) {
                       {results.map((t, i) => {
                         const isThisPlaying = playingId === t.id;
                         const isAnyPlaying = playingId !== null;
+                        const isThisQueued = queuedId === t.id;
                         const isSelected = i === selectedIndex;
                         return (
                           <motion.li
@@ -288,7 +297,6 @@ export default function SearchBar({ onPlay }) {
                             exit={{ opacity: 0, scale: 0.96 }}
                             transition={{ type: "spring", stiffness: 320, damping: 30, delay: isAnyPlaying ? 0 : i * 0.03 }}
                             onMouseEnter={() => setSelectedIndex(i)}
-                            onClick={() => !isAnyPlaying && handlePlay(t)}
                             whileTap={{ scale: 0.98 }}
                           >
                             {isSelected && !isAnyPlaying && (
@@ -296,11 +304,34 @@ export default function SearchBar({ onPlay }) {
                             )}
                             <div className="search-result-content">
                               {t.albumArt && <img src={t.albumArt} alt="" className="search-result-art" />}
-                              <div className="search-result-info">
+                              <div
+                                className="search-result-info"
+                                onClick={() => !isAnyPlaying && handlePlay(t)}
+                                style={{ cursor: "pointer" }}
+                              >
                                 <span className="search-result-name">{t.name}</span>
                                 <span className="search-result-artist">{t.artists}</span>
                               </div>
-                              <span className="search-play-btn">
+
+                              {/* เพิ่มในคิว — ไม่เล่นทันที แค่ต่อท้ายคิวปัจจุบัน */}
+                              <button
+                                type="button"
+                                className={`search-queue-btn${isThisQueued ? " search-queue-btn--done" : ""}`}
+                                title="เพิ่มในคิว"
+                                disabled={isAnyPlaying}
+                                onClick={(e) => handleAddToQueue(e, t)}
+                              >
+                                {isThisQueued ? "✓" : "+"}
+                              </button>
+
+                              {/* เล่นทันที */}
+                              <button
+                                type="button"
+                                className="search-play-btn"
+                                title="เล่นทันที"
+                                disabled={isAnyPlaying}
+                                onClick={() => !isAnyPlaying && handlePlay(t)}
+                              >
                                 {isThisPlaying ? (
                                   <motion.span
                                     className="search-spinner"
@@ -310,7 +341,7 @@ export default function SearchBar({ onPlay }) {
                                 ) : (
                                   "▶"
                                 )}
-                              </span>
+                              </button>
                             </div>
                           </motion.li>
                         );
@@ -415,10 +446,25 @@ export default function SearchBar({ onPlay }) {
         .search-result-artist { color: rgba(255,255,255,0.55); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .search-play-btn {
-          width: 26px; height: 26px; flex-shrink: 0;
+          width: 30px; height: 30px; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
           color: rgba(255,255,255,0.7); font-size: 12px;
+          background: rgba(255,255,255,0.06); border: none; border-radius: 50%;
+          cursor: pointer; transition: background 0.15s, color 0.15s;
         }
+        .search-play-btn:hover:not(:disabled) { background: rgba(29,185,84,0.25); color: #1DB954; }
+        .search-play-btn:disabled { cursor: default; opacity: 0.5; }
+
+        .search-queue-btn {
+          width: 26px; height: 26px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          color: rgba(255,255,255,0.6); font-size: 16px; font-weight: 400;
+          background: rgba(255,255,255,0.06); border: none; border-radius: 50%;
+          cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.15s;
+        }
+        .search-queue-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: #fff; }
+        .search-queue-btn--done { background: rgba(29,185,84,0.25); color: #1DB954; transform: scale(1.08); }
+        .search-queue-btn:disabled { cursor: default; opacity: 0.5; }
         .search-spinner {
           width: 16px; height: 16px; border-radius: 50%;
           border: 2px solid rgba(255,255,255,0.25); border-top-color: #1DB954;

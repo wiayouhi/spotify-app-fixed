@@ -48,29 +48,34 @@ export async function fetchCurrentlyPlaying() {
 }
 
 // Playback Controls
-export async function togglePlayPause(isPlaying) {
+// deviceId ตัวเลือก: ถ้าใส่มา จะสั่งอุปกรณ์นั้นตรงๆ (เช่น web player)
+// ถ้าไม่ใส่ Spotify จะสั่งอุปกรณ์ที่ active อยู่ตามปกติ (พฤติกรรมเดิม)
+export async function togglePlayPause(isPlaying, deviceId) {
   const token = await getValidAccessToken();
   if (!token) return;
   const endpoint = isPlaying ? "pause" : "play";
-  await fetch(`https://api.spotify.com/v1/me/player/${endpoint}`, {
+  const qs = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  await fetch(`https://api.spotify.com/v1/me/player/${endpoint}${qs}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` }
   });
 }
 
-export async function skipToNext() {
+export async function skipToNext(deviceId) {
   const token = await getValidAccessToken();
   if (!token) return;
-  await fetch("https://api.spotify.com/v1/me/player/next", {
+  const qs = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  await fetch(`https://api.spotify.com/v1/me/player/next${qs}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` }
   });
 }
 
-export async function skipToPrevious() {
+export async function skipToPrevious(deviceId) {
   const token = await getValidAccessToken();
   if (!token) return;
-  await fetch("https://api.spotify.com/v1/me/player/previous", {
+  const qs = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  await fetch(`https://api.spotify.com/v1/me/player/previous${qs}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` }
   });
@@ -92,11 +97,80 @@ export async function fetchQueue() {
   }));
 }
 
-export async function seekToPosition(positionMs) {
+export async function seekToPosition(positionMs, deviceId) {
   const token = await getValidAccessToken();
   if (!token) return;
-  await fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${Math.round(positionMs)}`, {
+  const qs = new URLSearchParams({ position_ms: String(Math.round(positionMs)) });
+  if (deviceId) qs.set("device_id", deviceId);
+  await fetch(`https://api.spotify.com/v1/me/player/seek?${qs.toString()}`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` }
   });
+}
+
+// ─── Volume ───────────────────────────────────────────────
+// ปรับเสียงของอุปกรณ์ที่กำหนด (หรืออุปกรณ์ที่ active อยู่ ถ้าไม่ระบุ deviceId)
+export async function setPlaybackVolume(volumePercent, deviceId) {
+  const token = await getValidAccessToken();
+  if (!token) return false;
+  const qs = new URLSearchParams({ volume_percent: String(Math.round(volumePercent)) });
+  if (deviceId) qs.set("device_id", deviceId);
+  const res = await fetch(`https://api.spotify.com/v1/me/player/volume?${qs.toString()}`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.ok;
+}
+
+// ดึงสถานะการเล่นเต็มรูปแบบ รวมข้อมูลอุปกรณ์ปัจจุบัน (ชื่อ, volume_percent, active)
+// ใช้ endpoint /me/player แทน /me/player/currently-playing เพราะตัวหลังไม่มีข้อมูล device
+export async function fetchPlaybackState() {
+  const token = await getValidAccessToken();
+  if (!token) return null;
+  const res = await fetch("https://api.spotify.com/v1/me/player", {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (res.status === 204) return { device: null, isPlaying: false };
+  if (!res.ok) return null;
+  const data = await res.json();
+  return {
+    device: data.device
+      ? {
+          id: data.device.id,
+          name: data.device.name,
+          type: data.device.type,
+          isActive: data.device.is_active,
+          volumePercent: data.device.volume_percent,
+        }
+      : null,
+    isPlaying: Boolean(data.is_playing),
+  };
+}
+
+// ─── Search actions: เล่นทันที / เพิ่มเข้าคิว ────────────────
+export async function playTrackNow(uri, deviceId) {
+  const token = await getValidAccessToken();
+  if (!token) return false;
+  const qs = deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : "";
+  const res = await fetch(`https://api.spotify.com/v1/me/player/play${qs}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uris: [uri] }),
+  });
+  return res.ok;
+}
+
+export async function addTrackToQueue(uri, deviceId) {
+  const token = await getValidAccessToken();
+  if (!token) return false;
+  const qs = new URLSearchParams({ uri });
+  if (deviceId) qs.set("device_id", deviceId);
+  const res = await fetch(`https://api.spotify.com/v1/me/player/queue?${qs.toString()}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.ok;
 }

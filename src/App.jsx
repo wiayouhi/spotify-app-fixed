@@ -21,6 +21,8 @@ import MiniNextTrack from "./components/MiniNextTrack";
 import WeatherWidget from "./components/WeatherWidget";
 import SettingsPanel from "./components/SettingsPanel";
 import WebPlayer from "./components/WebPlayer";
+import VolumeSlider from "./components/VolumeSlider";
+import { DeviceProvider } from "./context/DeviceContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 import "./styles/app.css";
@@ -263,7 +265,10 @@ function MainApp() {
                     durationMs={track?.durationMs}
                     isPlaying={isPlaying}
                   />
-                  <PlayerControls isPlaying={isPlaying} />
+                  <div className="player-controls-row">
+                    <PlayerControls isPlaying={isPlaying} />
+                    <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
+                  </div>
                   {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
                 </motion.div>
               </motion.div>
@@ -417,5 +422,9 @@ export default function App() {
     return <AuthCallback onComplete={() => { setLoggedIn(true); setRoute("main"); }} />;
   }
   if (!loggedIn) return <LoginScreen />;
-  return <MainApp />;
+  return (
+    <DeviceProvider>
+      <MainApp />
+    </DeviceProvider>
+  );
 }

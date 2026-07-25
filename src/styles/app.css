@@ -514,6 +514,13 @@ body {
 /* ═══════════════════════════════════════════
    PLAYER CONTROLS
 ═══════════════════════════════════════════ */
+.player-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
 .player-controls {
   display: flex;
   align-items: center;
