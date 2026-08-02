@@ -4,39 +4,55 @@ import { useDevice } from "../context/DeviceContext";
 
 /**
  * PlayerControls — ปุ่มควบคุมเพลง (ก่อนหน้า / เล่น-หยุด / ถัดไป)
- * ดีไซน์พรีเมียม เข้าชุดกับ VolumeSlider แต่เด่นกว่า:
- * - กระจกเข้มขึ้น มีเงาหลายชั้นให้ดูมีมิติ + ฮาโล่หมุนช้าๆ อยู่ด้านหลังตลอดเวลา
- * - แต่ละปุ่มเข้าจอแบบ stagger ทีละตัว (spring pop) ไม่ใช่เข้าพร้อมกันทั้งก้อน
- * - ทุกองค์ประกอบมีอนิเมชั่นของตัวเองที่ไม่ซ้ำกัน วิ่งต่อเนื่องตลอดเวลา
+ * ธีมใหม่: ขาว-แพลทินัมเงางาม (จากเดิมเขียว Spotify) หรูขึ้น มีมิติขึ้น
+ * - เปิดตัวแบบ "unfurl": วงแหวนแสงกระเพื่อมออกจากศูนย์กลาง ปุ่มกางออกจากปุ่มเล่นเหมือนพัด
+ * - พื้นผิวมุก (pearlescent) ที่ปุ่มเล่น มีแสงวิ่งวนตลอดเวลา + อนุภาคแสงโคจรรอบปุ่ม
+ * - ทุกองค์ประกอบมีจังหวะเคลื่อนไหวของตัวเอง ไม่หยุดนิ่งแม้ตอน idle
  */
 export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
   const { targetDeviceId } = useDevice();
   const dur = (b) => b / animSpeed;
 
   const barVariants = {
-    hidden: { opacity: 0, y: 26, scale: 0.94 },
+    hidden: { opacity: 0, y: 30, scale: 0.82 },
     visible: {
       opacity: 1,
       y: 0,
       scale: 1,
       transition: {
-        duration: dur(0.4),
+        duration: dur(0.55),
         ease: [0.16, 1, 0.3, 1],
-        staggerChildren: dur(0.09),
-        delayChildren: dur(0.12),
+        staggerChildren: dur(0.1),
+        delayChildren: dur(0.16),
       },
     },
   };
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 18, scale: 0.5 },
+  // ปุ่มซ้าย-ขวา "กางออก" จากจุดศูนย์กลางเหมือนพัด
+  const sideVariants = (fromX) => ({
+    hidden: { opacity: 0, x: fromX, y: 14, scale: 0.3, rotate: fromX > 0 ? 50 : -50 },
     visible: {
       opacity: 1,
+      x: 0,
       y: 0,
       scale: 1,
-      transition: { type: "spring", stiffness: 300, damping: 20 },
+      rotate: 0,
+      transition: { type: "spring", stiffness: 260, damping: 18 },
+    },
+  });
+
+  const playVariants = {
+    hidden: { opacity: 0, scale: 0.35, rotate: -140 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      rotate: 0,
+      transition: { type: "spring", stiffness: 240, damping: 16, delay: dur(0.05) },
     },
   };
+
+  // อนุภาคแสงโคจรรอบปุ่มเล่น
+  const orbitDots = [0, 1, 2, 3];
 
   return (
     <AnimatePresence>
@@ -47,16 +63,25 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
         animate="visible"
         exit="hidden"
       >
-        {/* ฮาโล่เรืองแสงหมุนช้าๆ ด้านหลัง — บรรยากาศพรีเมียม วิ่งตลอดเวลาไม่หยุด */}
+        {/* วงแหวนกระเพื่อมออกจากศูนย์กลางตอนเปิดตัว */}
+        <motion.span
+          className="entry-ripple"
+          initial={{ opacity: 0.9, scale: 0.2 }}
+          animate={{ opacity: 0, scale: 2.4 }}
+          transition={{ duration: dur(0.9), ease: "easeOut" }}
+        />
+
+        {/* ฮาโล่เรืองแสงหมุนช้าๆ ด้านหลัง — วิ่งตลอดเวลาไม่หยุด */}
         <span className="controls-halo" />
+        <span className="controls-halo reverse" />
 
         <motion.button
-          variants={itemVariants}
+          variants={sideVariants(-40)}
           className="control-btn"
           onClick={() => skipToPrevious(targetDeviceId)}
           title="Previous"
-          whileHover={{ scale: 1.12 }}
-          whileTap={{ scale: 0.86 }}
+          whileHover={{ scale: 1.14 }}
+          whileTap={{ scale: 0.85 }}
           transition={{ type: "spring", stiffness: 420, damping: 22 }}
         >
           <span className="icon-float prev">
@@ -67,7 +92,7 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
         </motion.button>
 
         <motion.button
-          variants={itemVariants}
+          variants={playVariants}
           className="control-btn play-btn"
           onClick={() => togglePlayPause(isPlaying, targetDeviceId)}
           title={isPlaying ? "Pause" : "Play"}
@@ -83,15 +108,15 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
                   key="pulse-1"
                   className="play-pulse"
                   initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: [0.55, 0], scale: [0.85, 1.75] }}
+                  animate={{ opacity: [0.6, 0], scale: [0.85, 1.8] }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: dur(1.8), repeat: Infinity, ease: "easeOut" }}
                 />
                 <motion.span
                   key="pulse-2"
-                  className="play-pulse gold"
+                  className="play-pulse silver"
                   initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: [0.35, 0], scale: [0.85, 1.75] }}
+                  animate={{ opacity: [0.4, 0], scale: [0.85, 1.8] }}
                   exit={{ opacity: 0 }}
                   transition={{
                     duration: dur(1.8),
@@ -104,8 +129,20 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             )}
           </AnimatePresence>
 
+          {/* อนุภาคแสงโคจรรอบปุ่มเล่น วิ่งตลอดเวลา */}
+          <span className="orbit-wrap">
+            {orbitDots.map((i) => (
+              <span
+                key={i}
+                className={`orbit-dot dot-${i}`}
+                style={{ animationDelay: `${(dur(4.8) / orbitDots.length) * i}s` }}
+              />
+            ))}
+          </span>
+
           <span className="play-btn-bg">
             <span className="play-btn-sheen" />
+            <span className="play-btn-shine" />
           </span>
 
           {/* ไอคอน play/pause สลับกันแบบ crossfade + หมุนเบาๆ */}
@@ -138,12 +175,12 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
         </motion.button>
 
         <motion.button
-          variants={itemVariants}
+          variants={sideVariants(40)}
           className="control-btn"
           onClick={() => skipToNext(targetDeviceId)}
           title="Next"
-          whileHover={{ scale: 1.12 }}
-          whileTap={{ scale: 0.86 }}
+          whileHover={{ scale: 1.14 }}
+          whileTap={{ scale: 0.85 }}
           transition={{ type: "spring", stiffness: 420, damping: 22 }}
         >
           <span className="icon-float next">
@@ -165,15 +202,39 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             box-sizing: border-box;
             border-radius: 999px;
             background:
-              radial-gradient(120% 160% at 20% -10%, rgba(255, 255, 255, 0.10), transparent 60%),
-              linear-gradient(180deg, rgba(20, 24, 21, 0.72), rgba(11, 13, 11, 0.6));
+              radial-gradient(120% 160% at 20% -10%, rgba(255, 255, 255, 0.14), transparent 60%),
+              linear-gradient(180deg, rgba(26, 26, 30, 0.72), rgba(10, 10, 12, 0.62));
             backdrop-filter: blur(22px) saturate(150%);
             -webkit-backdrop-filter: blur(22px) saturate(150%);
             box-shadow:
-              0 0 0 1px rgba(255, 255, 255, 0.05),
+              0 0 0 1px rgba(255, 255, 255, 0.07),
               0 24px 60px rgba(0, 0, 0, 0.5),
-              0 0 44px rgba(29, 185, 84, 0.08),
-              inset 0 1px 0 rgba(255, 255, 255, 0.09);
+              0 0 44px rgba(255, 255, 255, 0.06),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            animation: bar-breathe 6s ease-in-out infinite;
+          }
+          @keyframes bar-breathe {
+            0%, 100% { box-shadow:
+              0 0 0 1px rgba(255, 255, 255, 0.07),
+              0 24px 60px rgba(0, 0, 0, 0.5),
+              0 0 44px rgba(255, 255, 255, 0.06),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+            50% { box-shadow:
+              0 0 0 1px rgba(255, 255, 255, 0.11),
+              0 24px 64px rgba(0, 0, 0, 0.52),
+              0 0 58px rgba(255, 255, 255, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+          }
+
+          /* วงแหวนกระเพื่อมตอนเปิดตัว */
+          .entry-ripple {
+            position: absolute;
+            inset: -20%;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 40px rgba(255, 255, 255, 0.35);
+            pointer-events: none;
+            z-index: -1;
           }
 
           /* ฮาโล่หมุนช้าๆ อยู่ด้านหลัง ให้ความรู้สึกพรีเมียม/มีชีวิต ตลอดเวลา */
@@ -184,18 +245,33 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             border-radius: 50%;
             background: conic-gradient(
               from 0deg,
-              rgba(29, 185, 84, 0) 0deg,
-              rgba(29, 185, 84, 0.28) 90deg,
-              rgba(255, 214, 140, 0.18) 180deg,
-              rgba(29, 185, 84, 0) 270deg,
-              rgba(29, 185, 84, 0) 360deg
+              rgba(255, 255, 255, 0) 0deg,
+              rgba(255, 255, 255, 0.3) 90deg,
+              rgba(210, 214, 224, 0.2) 180deg,
+              rgba(255, 255, 255, 0) 270deg,
+              rgba(255, 255, 255, 0) 360deg
             );
             filter: blur(34px);
             animation: halo-spin 11s linear infinite;
             pointer-events: none;
           }
+          .controls-halo.reverse {
+            inset: -40%;
+            opacity: 0.6;
+            background: conic-gradient(
+              from 90deg,
+              rgba(255, 255, 255, 0) 0deg,
+              rgba(200, 205, 220, 0.22) 120deg,
+              rgba(255, 255, 255, 0) 240deg
+            );
+            filter: blur(26px);
+            animation: halo-spin-reverse 17s linear infinite;
+          }
           @keyframes halo-spin {
             to { transform: rotate(360deg); }
+          }
+          @keyframes halo-spin-reverse {
+            to { transform: rotate(-360deg); }
           }
 
           .control-btn {
@@ -208,18 +284,18 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             justify-content: center;
             border-radius: 50%;
             border: none;
-            background: rgba(255, 255, 255, 0.05);
-            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.85);
             cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
           }
           .control-btn:hover {
             color: #fff;
-            background: rgba(255, 255, 255, 0.13);
+            background: rgba(255, 255, 255, 0.16);
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.18);
           }
 
-          /* ลอยขึ้น-ลงเบาๆ ต่อเนื่องคนละจังหวะ — อยู่ในลูก span ธรรมดา ไม่ใช่ element
-             ที่ framer คุม transform อยู่ (ปุ่มแม่) เลยไม่มีทางชนกับ scale ของปุ่มตอน hover/tap */
+          /* ลอยขึ้น-ลงเบาๆ ต่อเนื่องคนละจังหวะ */
           .icon-float {
             display: flex;
             animation: icon-bob 2.6s ease-in-out infinite;
@@ -231,11 +307,11 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             50% { transform: translateY(-2px); }
           }
 
-          /* ปุ่มเล่น/หยุด — เด่นกว่าเพื่อนด้วยขนาด สี และแสง */
+          /* ปุ่มเล่น/หยุด — เด่นกว่าเพื่อนด้วยขนาดและผิวมุกเงางาม */
           .play-btn {
             width: 60px;
             height: 60px;
-            color: #0a0f0b;
+            color: #17181c;
             overflow: visible;
           }
           .play-btn:hover {
@@ -247,22 +323,22 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             inset: 0;
             overflow: hidden;
             border-radius: 50%;
-            background: linear-gradient(155deg, #24e86c, #1db954 55%, #148a41);
+            background: linear-gradient(155deg, #ffffff, #e6e7ec 55%, #c6c9d4);
             box-shadow:
-              0 8px 24px rgba(29, 185, 84, 0.5),
-              inset 0 1px 0 rgba(255, 255, 255, 0.4),
-              inset 0 -6px 10px rgba(0, 0, 0, 0.18);
+              0 8px 24px rgba(255, 255, 255, 0.28),
+              inset 0 1px 0 rgba(255, 255, 255, 0.9),
+              inset 0 -6px 10px rgba(0, 0, 0, 0.12);
             z-index: 0;
           }
 
-          /* ประกายเงาวิ่งผ่านผิวปุ่มเล่นแบบโลหะ ต่อเนื่องตลอดเวลา — องค์ประกอบธรรมดา ไม่ใช่ motion */
+          /* ประกายเงาวิ่งผ่านผิวปุ่มเล่นแบบมุกเงางาม ต่อเนื่องตลอดเวลา */
           .play-btn-sheen {
             position: absolute;
             inset: 0;
             background: linear-gradient(
               115deg,
               transparent 30%,
-              rgba(255, 255, 255, 0.65) 48%,
+              rgba(255, 255, 255, 0.85) 48%,
               transparent 66%
             );
             background-size: 260% 100%;
@@ -272,6 +348,25 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
           @keyframes sheen-move {
             0% { background-position: 160% 0; }
             60%, 100% { background-position: -60% 0; }
+          }
+
+          /* ประกายแสงจุดเล็กวิ่งวนตามขอบปุ่ม ให้ความรู้สึกมุก/เพชร */
+          .play-btn-shine {
+            position: absolute;
+            inset: -2px;
+            border-radius: 50%;
+            background: conic-gradient(
+              from 0deg,
+              transparent 0deg,
+              rgba(255, 255, 255, 0.9) 8deg,
+              transparent 20deg,
+              transparent 360deg
+            );
+            animation: shine-spin 4s linear infinite;
+            opacity: 0.7;
+          }
+          @keyframes shine-spin {
+            to { transform: rotate(360deg); }
           }
 
           .play-icon {
@@ -286,12 +381,49 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(29, 185, 84, 0.55), transparent 70%);
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.55), transparent 70%);
             z-index: 1;
             pointer-events: none;
           }
-          .play-pulse.gold {
-            background: radial-gradient(circle, rgba(255, 214, 140, 0.4), transparent 70%);
+          .play-pulse.silver {
+            background: radial-gradient(circle, rgba(200, 205, 220, 0.4), transparent 70%);
+          }
+
+          /* อนุภาคแสงโคจรรอบปุ่มเล่น */
+          .orbit-wrap {
+            position: absolute;
+            inset: -14px;
+            z-index: 1;
+            pointer-events: none;
+          }
+          .orbit-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            margin: -2px 0 0 -2px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 6px 1px rgba(255, 255, 255, 0.9);
+            opacity: 0;
+            animation: orbit-move 4.8s linear infinite;
+          }
+          @keyframes orbit-move {
+            0% {
+              opacity: 0;
+              transform: rotate(0deg) translateX(38px) rotate(0deg) scale(0.6);
+            }
+            8% { opacity: 0.9; }
+            50% {
+              opacity: 0.6;
+              transform: rotate(180deg) translateX(38px) rotate(-180deg) scale(1);
+            }
+            92% { opacity: 0.9; }
+            100% {
+              opacity: 0;
+              transform: rotate(360deg) translateX(38px) rotate(-360deg) scale(0.6);
+            }
           }
 
           @media (prefers-reduced-motion: reduce) {
@@ -301,8 +433,11 @@ export default function PlayerControls({ isPlaying, animSpeed = 1 }) {
             .icon-float,
             .play-btn-bg,
             .play-btn-sheen,
+            .play-btn-shine,
             .play-icon,
-            .play-pulse {
+            .play-pulse,
+            .orbit-dot,
+            .entry-ripple {
               transition: none !important;
               animation: none !important;
             }
