@@ -11,18 +11,17 @@ function formatTime(ms) {
   return `${min}:${sec.toString().padStart(2, "0")}`;
 }
 
-const WAVELENGTH = 40; // px per full cycle — bigger = gentler, rounder curve
-const WAVE_HEIGHT = 22; // overall vertical room for the wave to swing in
+const WAVELENGTH = 52; // px per full cycle — longer = calmer, more elongated wave
+const WAVE_HEIGHT = 22; // vertical room for the wave to swing in
 const AMPLITUDE = 5;
 const STROKE_WIDTH = 5;
 const PHASE_SPEED = 0.0045; // slither speed
 const DOT_SIZE = 15;
-const END_FADE_MS = 30000; // last 30s: wave animates flat
+const END_FADE_MS = 30000; // last 30s: wave eases back to flat
 
-// Catmull-Rom → cubic-Bezier conversion: given a sparse set of points it
-// draws a naturally rounded curve through all of them (no straight-line
-// segments, no sharp corners at the peaks) — much softer than raw sine
-// sampling.
+// Catmull-Rom → cubic-Bezier: draws a naturally rounded curve through a
+// sparse set of points, so there are no straight-line segments or sharp
+// corners at the peaks.
 function smoothPathFromPoints(points) {
   if (points.length < 2) return "";
   let d = `M${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
@@ -40,27 +39,30 @@ function smoothPathFromPoints(points) {
   return d;
 }
 
-// Builds the wave: sine curve that (a) tapers to a flat, straight tip right
-// where the played portion ends, and (b) is scaled by `amplitude`, which the
-// caller shrinks toward 0 during the last 30s of the track for a smooth
-// wavy → straight handoff as the song wraps up.
+// Builds the wave path across [0, width]. Both ends are pinned to the exact
+// vertical center: it eases up from flat right at the very start of the
+// track (so the line visibly "grows into" being wavy as the song begins),
+// and eases back down to flat right at its own tip (current position) —
+// and that tip taper shrinks further to fully flat over the final 30s.
 function buildWavePath(width, amplitude, phase) {
   const mid = WAVE_HEIGHT / 2;
   if (width <= 0) return `M0 ${mid} L0 ${mid}`;
 
   const step = Math.max(4, WAVELENGTH / 8);
-  const taperZone = Math.min(WAVELENGTH * 1.6, width);
+  const taperZone = Math.min(WAVELENGTH * 1.6, width / 2);
   const pts = [];
 
   for (let x = 0; x <= width; x += step) {
     let env = amplitude;
-    if (amplitude > 0 && x > width - taperZone) {
-      env = amplitude * Math.max(0, (width - x) / taperZone);
+    if (amplitude > 0 && taperZone > 0) {
+      const startEnv = x < taperZone ? x / taperZone : 1;
+      const endEnv = x > width - taperZone ? Math.max(0, (width - x) / taperZone) : 1;
+      env = amplitude * Math.min(startEnv, endEnv);
     }
     const y = mid + env * Math.sin((2 * Math.PI * x) / WAVELENGTH + phase);
     pts.push({ x, y });
   }
-  pts.push({ x: width, y: mid }); // guarantee a perfectly flat tip
+  pts.push({ x: width, y: mid }); // guarantee an exact flat tip
 
   return smoothPathFromPoints(pts);
 }
@@ -68,9 +70,12 @@ function buildWavePath(width, amplitude, phase) {
 const timeLabelStyle = {
   fontSize: "1rem",
   fontWeight: 500,
-  lineHeight: 1,
-  width: "2.75rem",
   fontVariantNumeric: "tabular-nums",
+  width: "2.75rem",
+  height: "1.2rem",
+  lineHeight: "1.2rem",
+  margin: 0,
+  padding: 0,
 };
 
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
@@ -102,7 +107,8 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
   }, []);
 
   // continuous slither animation while playing — recalculated every frame so
-  // both the tip taper and the last-30s flatten are always smooth, not a cut
+  // the start-of-track ease-in, the tip taper, and the last-30s flatten are
+  // all smooth, never a hard cut
   useAnimationFrame((_, delta) => {
     if (!isPlaying || trackWidth <= 0) return;
     phaseRef.current += delta * PHASE_SPEED;
@@ -133,11 +139,14 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+      style={{ display: "flex", alignItems: "center", gap: "0.75rem", width: "100%" }}
     >
-      <span className="progress-time" style={{ ...timeLabelStyle, textAlign: "left" }}>
+      <div
+        className="progress-time"
+        style={{ ...timeLabelStyle, display: "flex", alignItems: "center", justifyContent: "flex-start" }}
+      >
         {formatTime(progressMs)}
-      </span>
+      </div>
 
       <div
         className="progress-track"
@@ -150,27 +159,12 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           display: "flex",
           alignItems: "center",
           cursor: "pointer",
-          background: "transparent", // override any default track background
+          background: "transparent",
           padding: 0,
           border: "none",
         }}
       >
-        {/* unplayed portion — same visual weight as the wave's stroke */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "50%",
-            height: STROKE_WIDTH,
-            transform: "translateY(-50%)",
-            borderRadius: 999,
-            background: "rgba(255,255,255,0.22)",
-            pointerEvents: "none",
-          }}
-        />
-
-        {/* played portion — smooth white snake that flattens at its own tip */}
+        {/* played portion only — unplayed remainder stays fully invisible */}
         {trackWidth > 0 && (
           <svg
             width={clipWidthPx}
@@ -227,9 +221,12 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
         onClick={() => setShowRemaining(!showRemaining)}
         style={{
           ...timeLabelStyle,
-          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
           position: "relative",
-          height: "1em",
+          cursor: "pointer",
+          overflow: "hidden",
         }}
       >
         <AnimatePresence mode="wait">
@@ -244,7 +241,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
               right: 0,
               top: "50%",
               transform: "translateY(-50%)",
-              lineHeight: 1,
+              lineHeight: timeLabelStyle.lineHeight,
             }}
           >
             {showRemaining ? `-${formatTime(displayTimeLeft)}` : formatTime(durationMs)}
