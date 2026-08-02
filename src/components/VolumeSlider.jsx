@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { fetchPlaybackState, setPlaybackVolume } from "../utils/spotifyApi";
 import { useDevice } from "../context/DeviceContext";
 
-const POLL_MS = 6000;
+const POLL_MS = 2000; // was 6000 — polled too slowly to feel "live" when volume changes on another device
 
 /**
  * VolumeSlider — ปรับเสียง + ซิงกับอุปกรณ์ที่กำลังเล่นอยู่จริง
@@ -219,7 +219,9 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             </motion.div>
 
             {/* จุดวงกลม — top:50% ของกล่อง .volume-rail สูง 4px คงที่ + margin ลบครึ่งขนาดตัวเอง
-                (ไม่ใช้ transform จัดตำแหน่งเด็ดขาด เพราะ framer เขียนทับ transform เองทุกครั้งที่ animate scale) */}
+                (ไม่ใช้ transform จัดตำแหน่งเด็ดขาด เพราะ framer เขียนทับ transform เองทุกครั้งที่ animate scale)
+                ปกติไม่มีขอบ/ไฟรอบตัวเลย — ขอบสีจะโผล่ขึ้นมาเฉพาะตอน syncFlash (มีคนปรับเสียงจาก
+                อุปกรณ์อื่น) เท่านั้น ผ่าน boxShadow ด้านล่าง แล้วก็จะหายไปเองตาม syncFlash */}
             <motion.div
               className="volume-thumb"
               animate={{
@@ -343,8 +345,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             transition: background 0.2s ease, color 0.2s ease;
           }
           .volume-mute-btn:hover {
-            color: #1db954;
-            background: rgba(29, 185, 84, 0.14);
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.16);
           }
           .volume-icon {
             display: flex;
@@ -391,8 +393,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             height: 100%;
             border-radius: 999px;
             overflow: hidden;
-            background: linear-gradient(90deg, #1db954, #21e065);
-            box-shadow: 0 0 12px rgba(29, 185, 84, 0.45);
+            background: #ffffff;
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
           }
 
           /* ประกายวิ่งเบาๆ ต่อเนื่องตลอดเวลาบนเส้นเสียง */
@@ -439,7 +441,9 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             );
           }
 
-          /* จุดวงกลม: จัดกึ่งกลางเส้นด้วย translate(-50%, -50%) แม่นยำทุกขนาด */
+          /* จุดวงกลม: จัดกึ่งกลางเส้นด้วย translate(-50%, -50%) แม่นยำทุกขนาด
+             ปกติมีแค่เงาดำบางๆ ไม่มีขอบสีล้อมรอบ — ขอบสีจะถูกเซ็ตผ่าน inline
+             style เฉพาะตอน syncFlash เท่านั้น (ดู .volume-thumb ใน JSX ด้านบน) */
           .volume-thumb {
             position: absolute;
             top: 50%;
@@ -450,8 +454,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             margin-left: -7px;
             border-radius: 50%;
             background: #fff;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45),
-              0 0 0 4px rgba(29, 185, 84, 0.18);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
           }
           .volume-thumb-pulse {
             position: absolute;
@@ -473,8 +476,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             flex-shrink: 0;
             font-size: 10px;
             font-weight: 600;
-            color: #1db954;
-            background: rgba(29, 185, 84, 0.16);
+            color: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.14);
             padding: 3px 9px;
             border-radius: 999px;
             white-space: nowrap;
