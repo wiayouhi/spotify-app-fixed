@@ -18,6 +18,8 @@ const STROKE_WIDTH = 5;
 const PHASE_SPEED = 0.0045; // slither speed
 const DOT_SIZE = 15;
 const END_FADE_MS = 30000; // last 30s: wave eases back to flat
+const UNPLAYED_LINE_HEIGHT = 3; // thin flat line for the part that hasn't played yet
+const UNPLAYED_LINE_COLOR = "rgba(255, 255, 255, 0.3)";
 
 // Catmull-Rom → cubic-Bezier: draws a naturally rounded curve through a
 // sparse set of points, so there are no straight-line segments or sharp
@@ -39,27 +41,24 @@ function smoothPathFromPoints(points) {
   return d;
 }
 
-// Builds the wave path across [0, width]. `taperStartX` is where the line
-// eases up from flat (the playhead/dot) — so the VISIBLE (unplayed) part of
-// the wave grows naturally out of the dot instead of popping in at full
-// amplitude — and it eases back down to flat right at the very end of the
-// track, with that end taper shrinking further to fully flat over the final
-// 30s of playback. Everything left of taperStartX is clipped away by the
-// caller anyway, so its exact shape there doesn't matter.
-function buildWavePath(width, amplitude, phase, taperStartX = 0) {
+// Builds the wave path across [0, width] — used only for the PLAYED portion.
+// Both ends are pinned to the exact vertical center: it eases up from flat
+// right at the very start of the track (so the line visibly "grows into"
+// being wavy as the song begins), and eases back down to flat right at its
+// own tip (the current playhead / dot) — and that tip taper shrinks further
+// to fully flat over the final 30s of the track.
+function buildWavePath(width, amplitude, phase) {
   const mid = WAVE_HEIGHT / 2;
   if (width <= 0) return `M0 ${mid} L0 ${mid}`;
 
   const step = Math.max(4, WAVELENGTH / 8);
-  const remaining = Math.max(0, width - taperStartX);
-  const taperZone = Math.min(WAVELENGTH * 1.6, remaining / 2);
+  const taperZone = Math.min(WAVELENGTH * 1.6, width / 2);
   const pts = [];
 
   for (let x = 0; x <= width; x += step) {
     let env = amplitude;
     if (amplitude > 0 && taperZone > 0) {
-      const distFromStart = x - taperStartX;
-      const startEnv = distFromStart < taperZone ? Math.max(0, distFromStart / taperZone) : 1;
+      const startEnv = x < taperZone ? x / taperZone : 1;
       const endEnv = x > width - taperZone ? Math.max(0, (width - x) / taperZone) : 1;
       env = amplitude * Math.min(startEnv, endEnv);
     }
@@ -122,23 +121,21 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
     return () => ro.disconnect();
   }, []);
 
-  // continuous slither animation while playing. The path is now built across
-  // the FULL track width (not just the unplayed portion) — the already-played
-  // segment gets visually clipped away below, it's not left out of the path
-  // itself. The wave eases in starting right at the playhead (the dot), so
-  // it visibly grows out of "now" into the unplayed remainder.
+  // continuous slither animation while playing — recalculated every frame so
+  // the start-of-track ease-in, the tip taper at the dot, and the last-30s
+  // flatten are all smooth, never a hard cut
   useAnimationFrame((_, delta) => {
     if (!isPlaying || trackWidth <= 0) return;
     phaseRef.current += delta * PHASE_SPEED;
-    const playheadX = progress * trackWidth;
-    setWavePath(buildWavePath(trackWidth, AMPLITUDE * endScale, phaseRef.current, playheadX));
+    const clipWidth = progress * trackWidth;
+    setWavePath(buildWavePath(clipWidth, AMPLITUDE * endScale, phaseRef.current));
   });
 
-  // when paused (or on resize) settle into a flat, static line across the
-  // full track width
+  // when paused (or on seek/resize) settle into a flat, static line
   useEffect(() => {
     if (isPlaying) return;
-    setWavePath(buildWavePath(trackWidth, 0, phaseRef.current, progress * trackWidth));
+    const clipWidth = progress * trackWidth;
+    setWavePath(buildWavePath(clipWidth, 0, phaseRef.current));
   }, [isPlaying, trackWidth, progress]);
 
   const handleSeek = (e) => {
@@ -150,6 +147,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
   };
 
   const clipWidthPx = progress * trackWidth;
+  const unplayedWidthPx = Math.max(0, trackWidth - clipWidthPx);
 
   return (
     <motion.div
@@ -192,16 +190,30 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           boxSizing: "border-box",
         }}
       >
-        {/* Full track wave is always drawn (the "normal" unplayed look).
-            The already-played segment (0 → clipWidthPx) is hidden with a
-            clip-path — the element and its path data stay fully intact in
-            the DOM, nothing is deleted/removed, it's just visually clipped
-            so only the unplayed remainder (clipWidthPx → end) shows. */}
+        {/* unplayed remainder — a plain, static flat line from the dot to
+            the end of the track (drawn first so the wave/dot sit on top) */}
+        {trackWidth > 0 && unplayedWidthPx > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              left: clipWidthPx,
+              top: "50%",
+              width: unplayedWidthPx,
+              height: UNPLAYED_LINE_HEIGHT,
+              borderRadius: UNPLAYED_LINE_HEIGHT / 2,
+              background: UNPLAYED_LINE_COLOR,
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+
+        {/* played portion — the animated/glowing wave */}
         {trackWidth > 0 && (
           <svg
-            width={trackWidth}
+            width={clipWidthPx}
             height={WAVE_HEIGHT}
-            viewBox={`0 0 ${trackWidth} ${WAVE_HEIGHT}`}
+            viewBox={`0 0 ${clipWidthPx} ${WAVE_HEIGHT}`}
             style={{
               position: "absolute",
               left: 0,
@@ -209,8 +221,6 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
               display: "block",
               overflow: "visible",
               pointerEvents: "none",
-              clipPath: `inset(0 0 0 ${clipWidthPx}px)`,
-              WebkitClipPath: `inset(0 0 0 ${clipWidthPx}px)`,
             }}
           >
             <path
