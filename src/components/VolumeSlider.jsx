@@ -184,66 +184,70 @@ export default function VolumeSlider({ animSpeed = 1 }) {
           ref={trackRef}
           onPointerDown={handlePointerDown}
         >
-          {/* rail: เส้นบางคงที่ ใช้ scaleY แทนการเปลี่ยน height เพื่อไม่ให้จุดศูนย์กลางขยับ */}
-          <motion.div
-            className="volume-rail"
-            animate={{ scaleY: active ? 1.8 : 1 }}
-            transition={{ duration: dur(0.2), ease: "easeOut" }}
-          >
-            <div className="volume-rail-bg" />
+          {/* volume-rail: กล่องอ้างอิงตำแหน่งคงที่ สูง 4px เป๊ะ ไม่ถูก transform ใดๆแตะเลย
+              จุดวงกลมยึดตำแหน่งกับกล่องนี้โดยตรง เลยไม่มีทางหลุดจากเส้นอีก */}
+          <div className="volume-rail">
+            {/* volume-rail-line: ตัวที่ขยายหนาตอน hover ด้วย scaleY (แยกออกมาต่างหาก
+                เพื่อไม่ให้จุดวงกลมโดนสเกลตามไปด้วยจนเพี้ยนรูป) */}
             <motion.div
-              className="volume-rail-fill"
-              animate={{ width: `${shownVolume}%` }}
-              transition={{ duration: dragging ? 0 : dur(0.25), ease: "easeOut" }}
+              className="volume-rail-line"
+              animate={{ scaleY: active ? 1.8 : 1 }}
+              transition={{ duration: dur(0.2), ease: "easeOut" }}
             >
-              {/* ประกายวิ่งต่อเนื่องบนแถบเสียง — เคลื่อนไหวตลอดเวลา */}
-              <div className="volume-rail-shimmer" />
-              {/* วาบไฟวิ่งผ่านตอนถูกซิงจากอุปกรณ์อื่น */}
-              <AnimatePresence>
-                {syncFlash && (
-                  <motion.div
-                    key={syncFlash.id}
-                    className={`volume-rail-sweep ${syncFlash.direction}`}
-                    initial={{ x: "-120%" }}
-                    animate={{ x: "220%" }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: dur(0.9), ease: "easeOut" }}
-                  />
-                )}
-              </AnimatePresence>
+              <div className="volume-rail-bg" />
+              <motion.div
+                className="volume-rail-fill"
+                animate={{ width: `${shownVolume}%` }}
+                transition={{ duration: dragging ? 0 : dur(0.25), ease: "easeOut" }}
+              >
+                {/* ประกายวิ่งต่อเนื่องบนแถบเสียง — เคลื่อนไหวตลอดเวลา */}
+                <div className="volume-rail-shimmer" />
+                {/* วาบไฟวิ่งผ่านตอนถูกซิงจากอุปกรณ์อื่น */}
+                <AnimatePresence>
+                  {syncFlash && (
+                    <motion.div
+                      key={syncFlash.id}
+                      className={`volume-rail-sweep ${syncFlash.direction}`}
+                      initial={{ x: "-120%" }}
+                      animate={{ x: "220%" }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: dur(0.9), ease: "easeOut" }}
+                    />
+                  )}
+                </AnimatePresence>
+              </motion.div>
             </motion.div>
-          </motion.div>
 
-          {/* จุดวงกลม — จัดกึ่งกลางด้วย margin (ไม่ใช่ transform) เพราะ framer-motion
-              จะเขียนทับ transform ทั้งก้อนเองทันทีที่มี animate({ scale }) อยู่
-              margin ไม่ได้อยู่ใน transform เลยไม่มีทางชนกันอีก */}
-          <motion.div
-            className="volume-thumb"
-            animate={{
-              left: `${shownVolume}%`,
-              scale: dragging ? 1.35 : active ? 1.1 : 0.9,
-            }}
-            style={{
-              boxShadow:
-                syncFlash?.direction === "up"
-                  ? "0 0 0 6px rgba(29,185,84,0.35), 0 2px 8px rgba(0,0,0,0.45)"
-                  : syncFlash?.direction === "down"
-                  ? "0 0 0 6px rgba(255,159,67,0.35), 0 2px 8px rgba(0,0,0,0.45)"
-                  : undefined,
-            }}
-            transition={{
-              left: { duration: dragging ? 0 : dur(0.25), ease: "easeOut" },
-              scale: { duration: dur(0.2), ease: "easeOut" },
-              boxShadow: { duration: dur(0.3) },
-            }}
-          >
-            {/* ลมหายใจเบาๆ ต่อเนื่อง ให้รู้สึกว่า widget ยังมีชีวิตอยู่ */}
-            <motion.span
-              className="volume-thumb-pulse"
-              animate={{ scale: [1, 1.9, 1], opacity: [0.5, 0, 0.5] }}
-              transition={{ duration: dur(2.2), repeat: Infinity, ease: "easeInOut" }}
-            />
-          </motion.div>
+            {/* จุดวงกลม — top:50% ของกล่อง .volume-rail สูง 4px คงที่ + margin ลบครึ่งขนาดตัวเอง
+                (ไม่ใช้ transform จัดตำแหน่งเด็ดขาด เพราะ framer เขียนทับ transform เองทุกครั้งที่ animate scale) */}
+            <motion.div
+              className="volume-thumb"
+              animate={{
+                left: `${shownVolume}%`,
+                scale: dragging ? 1.35 : active ? 1.1 : 0.9,
+              }}
+              style={{
+                boxShadow:
+                  syncFlash?.direction === "up"
+                    ? "0 0 0 6px rgba(29,185,84,0.35), 0 2px 8px rgba(0,0,0,0.45)"
+                    : syncFlash?.direction === "down"
+                    ? "0 0 0 6px rgba(255,159,67,0.35), 0 2px 8px rgba(0,0,0,0.45)"
+                    : undefined,
+              }}
+              transition={{
+                left: { duration: dragging ? 0 : dur(0.25), ease: "easeOut" },
+                scale: { duration: dur(0.2), ease: "easeOut" },
+                boxShadow: { duration: dur(0.3) },
+              }}
+            >
+              {/* ลมหายใจเบาๆ ต่อเนื่อง ให้รู้สึกว่า widget ยังมีชีวิตอยู่ */}
+              <motion.span
+                className="volume-thumb-pulse"
+                animate={{ scale: [1, 1.9, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ duration: dur(2.2), repeat: Infinity, ease: "easeInOut" }}
+              />
+            </motion.div>
+          </div>
         </div>
 
         <motion.span
@@ -359,11 +363,18 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             touch-action: none;
           }
 
-          /* เส้นหนาคงที่ 4px เสมอ ขยายด้วย scaleY เท่านั้น จุดศูนย์กลางเลยไม่ขยับ */
+          /* กล่องอ้างอิงตำแหน่ง สูง 4px คงที่ตลอด ไม่มี transform ใดๆ แตะเลย
+             จุดวงกลมยึดตำแหน่งกับกล่องนี้โดยตรง */
           .volume-rail {
             position: relative;
             width: 100%;
             height: 4px;
+          }
+          /* ตัวเส้นที่มองเห็น ขยายหนาด้วย scaleY ตอน hover แยกออกจากกล่องอ้างอิงด้านบน
+             เพื่อไม่ให้จุดวงกลม(ซึ่งอยู่นอก div นี้)โดนสเกลตามไปด้วย */
+          .volume-rail-line {
+            position: absolute;
+            inset: 0;
             border-radius: 999px;
             transform-origin: center;
           }
@@ -472,7 +483,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
           @media (prefers-reduced-motion: reduce) {
             .volume-bar,
             .volume-mute-btn,
-            .volume-rail,
+            .volume-rail-line,
             .volume-rail-fill,
             .volume-rail-shimmer,
             .volume-rail-sweep,
