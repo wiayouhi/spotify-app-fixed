@@ -122,7 +122,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
   return (
     <AnimatePresence>
       <motion.div
-        className="volume-bar"
+        className={`volume-bar${syncFlash ? " volume-bar--sync-visible" : ""}`}
         initial={{ opacity: 0, y: 28 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 28 }}
@@ -280,12 +280,24 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             position: relative;
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 10px;
             width: 100%;
-            padding: 10px 18px;
+            padding: 7px 12px;
             box-sizing: border-box;
-            border-radius: 16px;
+            border-radius: 14px;
             overflow: hidden;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            box-shadow: none;
+            transition: background 0.3s ease, box-shadow 0.3s ease,
+              -webkit-backdrop-filter 0.3s ease, backdrop-filter 0.3s ease;
+          }
+          /* กล่องกระจก (glass panel) ปกติไม่โชว์เลย (โปร่งใสหมด ไม่มีขอบ) —
+             จะปรากฏขึ้นมาเฉพาะตอนมีการซิงเสียงจากอุปกรณ์อื่น (เพิ่ม/ลด) เท่านั้น
+             ผ่านคลาส .volume-bar--sync-visible แล้วก็จางหายกลับไปโปร่งใสเหมือนเดิม
+             ตามจังหวะ syncFlash ที่ auto เคลียร์ตัวเองอยู่แล้ว */
+          .volume-bar--sync-visible {
             background: linear-gradient(
               180deg,
               rgba(255, 255, 255, 0.07),
@@ -295,16 +307,6 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             -webkit-backdrop-filter: blur(18px) saturate(140%);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28),
               inset 0 1px 0 rgba(255, 255, 255, 0.06);
-            transition: background 0.25s ease, box-shadow 0.25s ease;
-          }
-          .volume-bar:hover {
-            background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.1),
-              rgba(255, 255, 255, 0.04)
-            );
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.34),
-              inset 0 1px 0 rgba(255, 255, 255, 0.1);
           }
 
           /* วาบไฟทั้งแถบ ตอนมีการปรับเสียงมาจากอุปกรณ์อื่น */
@@ -331,8 +333,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
 
           .volume-mute-btn {
             flex-shrink: 0;
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -358,7 +360,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             position: relative;
             flex: 1 1 auto;
             min-width: 0;
-            height: 24px;
+            height: 20px;
             display: flex;
             align-items: center;
             cursor: pointer;
@@ -448,10 +450,10 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             position: absolute;
             top: 50%;
             left: 0;
-            width: 14px;
-            height: 14px;
-            margin-top: -7px;
-            margin-left: -7px;
+            width: 12px;
+            height: 12px;
+            margin-top: -6px;
+            margin-left: -6px;
             border-radius: 50%;
             background: #fff;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
@@ -465,9 +467,9 @@ export default function VolumeSlider({ animSpeed = 1 }) {
 
           .volume-value {
             flex-shrink: 0;
-            width: 34px;
+            width: 30px;
             text-align: right;
-            font-size: 12px;
+            font-size: 11px;
             font-variant-numeric: tabular-nums;
             color: rgba(255, 255, 255, 0.7);
           }
