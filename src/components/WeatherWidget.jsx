@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 const WMO_CODES = {
@@ -25,31 +25,29 @@ const WMO_CODES = {
   99: { label: "พายุลูกเห็บหนัก", key: "thunderstorm" },
 };
 
-// Gradient mood per condition — used for the full-screen header.
 const MOOD = {
-  clear: { day: ["#FF9A3D", "#FFD93D"], night: ["#0F2350", "#2A3D6B"] },
-  "mostly-clear": { day: ["#4FACFE", "#FFD93D"], night: ["#101E42", "#2C3E68"] },
-  "partly-cloudy": { day: ["#6DA9E4", "#C9DEF2"], night: ["#16233F", "#324262"] },
-  overcast: { day: ["#7C8DA6", "#B7C3D2"], night: ["#1C2534", "#3A4457"] },
-  fog: { day: ["#8FA3B8", "#D3DEE8"], night: ["#20293A", "#3E4A5E"] },
-  drizzle: { day: ["#5B8DBE", "#A2C4E3"], night: ["#152239", "#2C4260"] },
-  rain: { day: ["#3A6EA5", "#7FA6D1"], night: ["#101B33", "#233854"] },
-  "rain-heavy": { day: ["#2E5C90", "#5F8CBE"], night: ["#0C1830", "#1E304C"] },
-  snow: { day: ["#8CA4C0", "#E9F1F9"], night: ["#1D2A42", "#465A78"] },
-  shower: { day: ["#4A7AB5", "#8FB6DD"], night: ["#122036", "#28405E"] },
-  thunderstorm: { day: ["#3E4C6E", "#69769B"], night: ["#0D1220", "#292F49"] },
+  clear: { day: ["#FF9A3D", "#FFD93D"], night: ["#0B1830", "#1F3762"] },
+  "mostly-clear": { day: ["#4FACFE", "#8FD3FE"], night: ["#0D1B38", "#22335C"] },
+  "partly-cloudy": { day: ["#6DA9E4", "#9FC4EB"], night: ["#122140", "#2A3A5E"] },
+  overcast: { day: ["#7C8DA6", "#9DAABE"], night: ["#1C2534", "#39434F"] },
+  fog: { day: ["#8FA3B8", "#B7C4D2"], night: ["#20293A", "#3A4658"] },
+  drizzle: { day: ["#5B8DBE", "#87ABD1"], night: ["#101E38", "#233752"] },
+  rain: { day: ["#3A6EA5", "#6690BE"], night: ["#0C1830", "#1E3050"] },
+  "rain-heavy": { day: ["#28517F", "#4A749F"], night: ["#0A1426", "#182A44"] },
+  snow: { day: ["#8CA4C0", "#C4D3E3"], night: ["#1D2A42", "#3D4C68"] },
+  shower: { day: ["#4A7AB5", "#7BA0CB"], night: ["#101E38", "#243C58"] },
+  thunderstorm: { day: ["#333F5C", "#525F80"], night: ["#0A0E1C", "#20263C"] },
 };
 
-// ─── Reusable animated pieces (all pure SVG, nothing emoji) ───
+const range = (n) => Array.from({ length: n }, (_, i) => i);
+
+// ─── Sky bodies ───
 
 function SunCore({ reduce, cx = 20, cy = 20, r = 7 }) {
   return (
     <>
       <motion.circle
-        cx={cx}
-        cy={cy}
-        r={r + 5}
-        fill="url(#sunGlow)"
+        cx={cx} cy={cy} r={r + 5} fill="url(#sunGlow)"
         animate={reduce ? {} : { opacity: [0.55, 0.9, 0.55], scale: [1, 1.08, 1] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
         style={{ transformOrigin: `${cx}px ${cy}px` }}
@@ -59,14 +57,13 @@ function SunCore({ reduce, cx = 20, cy = 20, r = 7 }) {
         transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
         style={{ transformOrigin: `${cx}px ${cy}px` }}
       >
-        {Array.from({ length: 8 }).map((_, i) => {
-          const angle = (i * Math.PI) / 4;
-          const x1 = cx + Math.cos(angle) * (r + 3);
-          const y1 = cy + Math.sin(angle) * (r + 3);
-          const x2 = cx + Math.cos(angle) * (r + 7);
-          const y2 = cy + Math.sin(angle) * (r + 7);
+        {range(8).map((i) => {
+          const a = (i * Math.PI) / 4;
           return (
-            <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#FFD93D" strokeWidth="1.8" strokeLinecap="round" />
+            <line key={i}
+              x1={cx + Math.cos(a) * (r + 3)} y1={cy + Math.sin(a) * (r + 3)}
+              x2={cx + Math.cos(a) * (r + 7)} y2={cy + Math.sin(a) * (r + 7)}
+              stroke="#FFD93D" strokeWidth="1.8" strokeLinecap="round" />
           );
         })}
       </motion.g>
@@ -78,19 +75,11 @@ function SunCore({ reduce, cx = 20, cy = 20, r = 7 }) {
 function MoonCore({ reduce, cx = 20, cy = 20, r = 7 }) {
   return (
     <>
-      <motion.circle
-        cx={cx}
-        cy={cy}
-        r={r + 4}
-        fill="url(#moonGlow)"
+      <motion.circle cx={cx} cy={cy} r={r + 4} fill="url(#moonGlow)"
         animate={reduce ? {} : { opacity: [0.4, 0.7, 0.4] }}
         transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-        style={{ transformOrigin: `${cx}px ${cy}px` }}
-      />
-      <path
-        d={`M${cx + r * 0.6} ${cy - r}a${r} ${r} 0 1 0 0 ${r * 2}a${r * 0.78} ${r * 0.78} 0 0 1 0-${r * 2}z`}
-        fill="#EAF0FA"
-      />
+        style={{ transformOrigin: `${cx}px ${cy}px` }} />
+      <path d={`M${cx + r * 0.6} ${cy - r}a${r} ${r} 0 1 0 0 ${r * 2}a${r * 0.78} ${r * 0.78} 0 0 1 0-${r * 2}z`} fill="#EAF0FA" />
       {[[-4, -3, 1.1], [3, 2, 0.8], [-1, 4, 0.7]].map(([dx, dy, rr], i) => (
         <circle key={i} cx={cx + dx} cy={cy + dy} r={rr} fill="rgba(180,196,224,0.55)" />
       ))}
@@ -98,97 +87,156 @@ function MoonCore({ reduce, cx = 20, cy = 20, r = 7 }) {
   );
 }
 
-function CloudShape({ d, fill, driftX = 3, duration = 6, delay = 0, reduce }) {
-  return (
-    <motion.path
-      d={d}
-      fill={fill}
-      animate={reduce ? {} : { x: [-driftX, driftX, -driftX] }}
-      transition={{ duration, repeat: Infinity, ease: "easeInOut", delay }}
-    />
-  );
-}
-
-function RainDrops({ count = 3, xs, fromY = 16, toY = 26, color = "#42A5F5", speed = 0.9, reduce }) {
-  const drops = xs || Array.from({ length: count }).map((_, i) => 6 + i * 6);
+function StarField({ w, h, count = 16, reduce }) {
+  const stars = useMemo(() => range(count).map((i) => ({
+    x: (i * 53.7) % w,
+    y: (i * 29.3) % (h * 0.6),
+    r: 0.6 + (i % 3) * 0.35,
+    delay: (i % 7) * 0.4,
+  })), [w, h, count]);
   return (
     <>
-      {drops.map((x, i) => (
-        <motion.line
-          key={i}
-          x1={x}
-          y1={fromY}
-          x2={x - 1.5}
-          y2={fromY + 4}
-          stroke={color}
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          animate={reduce ? { opacity: 0.85 } : { y: [0, toY - fromY], opacity: [0, 1, 0] }}
-          transition={{ duration: speed, repeat: Infinity, ease: "easeIn", delay: (i * speed) / drops.length }}
-        />
+      {stars.map((s, i) => (
+        <motion.circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#fff"
+          animate={reduce ? { opacity: 0.7 } : { opacity: [0.2, 0.9, 0.2] }}
+          transition={{ duration: 2.4 + (i % 4) * 0.5, repeat: Infinity, ease: "easeInOut", delay: s.delay }} />
       ))}
     </>
   );
 }
 
-function SnowFlakes({ xs, reduce }) {
-  const flakes = xs || [8, 14, 20, 26, 32];
+// ─── Puffy clouds built from primitives so they scale cleanly to any size ───
+
+function Puff({ fill }) {
   return (
     <>
-      {flakes.map((x, i) => (
+      <rect x="-26" y="-2" width="52" height="15" rx="7.5" fill={fill} />
+      <circle cx="-14" cy="-7" r="11.5" fill={fill} />
+      <circle cx="3" cy="-11" r="13.5" fill={fill} />
+      <circle cx="19" cy="-6" r="10.5" fill={fill} />
+    </>
+  );
+}
+
+function CloudLayer({ cx, cy, scale = 1, fill, driftX = 4, duration = 7, delay = 0, reduce }) {
+  return (
+    <g transform={`translate(${cx},${cy}) scale(${scale})`}>
+      <motion.g
+        animate={reduce ? {} : { x: [-driftX, driftX, -driftX] }}
+        transition={{ duration, repeat: Infinity, ease: "easeInOut", delay }}
+      >
+        <Puff fill={fill} />
+      </motion.g>
+    </g>
+  );
+}
+
+// ─── Realistic precipitation fields — many streaks/flakes spread across
+// the whole scene and animated continuously, instead of a handful of
+// static dots, so rain reads as rain rather than a countable few drops. ───
+
+function RainField({ w, h, count = 40, heavy = false, angle = 10, reduce }) {
+  const rad = (angle * Math.PI) / 180;
+  const drops = useMemo(() => range(count).map((i) => {
+    const x = (i * 61.8) % w;
+    const len = heavy ? 16 + (i % 6) * 2.5 : 10 + (i % 5) * 2;
+    const dur = (heavy ? 0.5 : 0.85) + (i % 6) * 0.06;
+    const delay = (i * dur) / count;
+    return { x, len, dur, delay, opacity: heavy ? 0.85 : 0.6 + (i % 3) * 0.08 };
+  }), [w, count, heavy]);
+
+  return (
+    <g>
+      {drops.map((d, i) => {
+        const dx = Math.sin(rad) * d.len;
+        const dy = Math.cos(rad) * d.len;
+        const travel = h + 30;
+        return (
+          <motion.line
+            key={i}
+            x1={d.x} y1={-14} x2={d.x - dx} y2={-14 + dy}
+            stroke={heavy ? "rgba(165,200,238,0.85)" : "rgba(180,212,242,0.65)"}
+            strokeWidth={heavy ? 1.7 : 1.15}
+            strokeLinecap="round"
+            animate={reduce ? { opacity: d.opacity } : { y: [0, travel], opacity: [0, d.opacity, d.opacity, 0] }}
+            transition={{ duration: d.dur, repeat: Infinity, ease: "linear", delay: d.delay }}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function SnowField({ w, h, count = 30, reduce }) {
+  const flakes = useMemo(() => range(count).map((i) => {
+    const x = (i * 47.3) % w;
+    const r = 0.9 + (i % 4) * 0.5;
+    const dur = 3.2 + (i % 5) * 0.6;
+    const delay = (i * dur) / count;
+    const sway = 5 + (i % 3) * 3;
+    return { x, r, dur, delay, sway };
+  }), [w, count]);
+
+  return (
+    <g>
+      {flakes.map((f, i) => (
         <motion.circle
-          key={i}
-          cx={x}
-          cy={16}
-          r={1.4}
-          fill="#fff"
-          animate={reduce ? { opacity: 0.85 } : { y: [0, 14, 0], x: [0, i % 2 === 0 ? 2 : -2, 0], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 2.4 + (i % 3) * 0.4, repeat: Infinity, ease: "easeInOut", delay: i * 0.3 }}
+          key={i} cx={f.x} cy={-6} r={f.r} fill="#fff"
+          animate={reduce ? { opacity: 0.85 } : { y: [0, h + 14], x: [0, f.sway, -f.sway, 0], opacity: [0, 0.95, 0.95, 0] }}
+          transition={{ duration: f.dur, repeat: Infinity, ease: "linear", delay: f.delay }}
         />
       ))}
-    </>
+    </g>
   );
 }
 
-function LightningBolt({ reduce }) {
+function FogBands({ w, h, reduce }) {
+  const bands = [
+    { y: h * 0.28, width: w * 0.85, o: 0.55, dur: 9 },
+    { y: h * 0.5, width: w * 0.65, o: 0.4, dur: 7 },
+    { y: h * 0.72, width: w * 0.9, o: 0.5, dur: 11 },
+  ];
   return (
-    <motion.path
-      d="M20 14l-4.5 7h3.4l-3.9 6.5 6.4-8h-3.6l3.6-5.5z"
-      fill="#FFD600"
-      animate={reduce ? { opacity: 1 } : { opacity: [0, 0, 1, 0.3, 1, 0, 0, 0] }}
-      transition={{ duration: 2.6, repeat: Infinity, ease: "linear", repeatDelay: 1.4, times: [0, 0.55, 0.6, 0.65, 0.72, 0.78, 0.9, 1] }}
-    />
+    <g>
+      {bands.map((b, i) => (
+        <motion.rect
+          key={i} x={(w - b.width) / 2} y={b.y} width={b.width} height={h * 0.12} rx={h * 0.06}
+          fill={`rgba(220,230,240,${b.o})`}
+          animate={reduce ? {} : { x: [(w - b.width) / 2 - 10, (w - b.width) / 2 + 10, (w - b.width) / 2 - 10] }}
+          transition={{ duration: b.dur, repeat: Infinity, ease: "easeInOut", delay: i * 0.6 }}
+        />
+      ))}
+    </g>
   );
 }
 
-function FogLines({ reduce }) {
-  const rows = [{ y: 9, w: 26, o: 0.75 }, { y: 15, w: 20, o: 0.55 }, { y: 21, w: 26, o: 0.4 }];
+function LightningFlash({ w, h, reduce }) {
   return (
     <>
-      {rows.map((r, i) => (
-        <motion.rect
-          key={i}
-          x={5}
-          y={r.y}
-          width={r.w}
-          height={2.6}
-          rx={1.3}
-          fill={`rgba(190,208,226,${r.o})`}
-          animate={reduce ? {} : { x: [5, 9, 5] }}
-          transition={{ duration: 5 + i, repeat: Infinity, ease: "easeInOut", delay: i * 0.4 }}
-        />
-      ))}
+      <motion.rect
+        x={0} y={0} width={w} height={h} fill="#EAF0FF"
+        animate={reduce ? { opacity: 0 } : { opacity: [0, 0, 0.35, 0, 0.15, 0, 0, 0, 0, 0] }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "linear", times: [0, 0.42, 0.45, 0.49, 0.52, 0.56, 0.6, 0.7, 0.85, 1] }}
+      />
+      <motion.path
+        d={`M${w * 0.52} ${h * 0.3}l-9 15h7l-8 16 13-17h-7l8-14z`}
+        fill="#FFE066"
+        animate={reduce ? { opacity: 1 } : { opacity: [0, 0, 1, 0.3, 1, 0, 0, 0, 0, 0] }}
+        transition={{ duration: 4.5, repeat: Infinity, ease: "linear", times: [0, 0.42, 0.45, 0.48, 0.5, 0.54, 0.6, 0.7, 0.85, 1] }}
+      />
     </>
   );
 }
 
-// ─── Full animated scene per condition, viewBox 0 0 40 40 ───
+// ─── Compact icon for the collapsed pill (viewBox 0 0 40 40) ───
+
 function WeatherScene({ code, size = 40, isDay = true }) {
   const reduce = useReducedMotion();
   const key = WMO_CODES[code]?.key || "clear";
+  const w = 40, h = 40;
 
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ display: "block" }}>
+    <svg width={size} height={size} viewBox={`0 0 ${w} ${h}`} fill="none" style={{ display: "block" }}>
       <defs>
         <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#FFE08A" stopOpacity="0.9" />
@@ -206,59 +254,66 @@ function WeatherScene({ code, size = 40, isDay = true }) {
         {key === "mostly-clear" && (
           <>
             {isDay ? <SunCore reduce={reduce} cx={16} cy={16} r={6} /> : <MoonCore reduce={reduce} cx={16} cy={16} r={6} />}
-            <CloudShape reduce={reduce} driftX={2} duration={7} fill="rgba(255,255,255,0.92)" d="M10 24c-3 0-5.5-2.4-5.5-5.3 0-2.7 2.1-5 4.8-5.3.9-2.6 3.4-4.4 6.3-4.4 3.6 0 6.6 2.8 6.9 6.3 2.4.4 4.2 2.5 4.2 5 0 2.9-2.4 5.3-5.3 5.3H10z" />
+            <CloudLayer cx={20} cy={22} scale={0.42} fill="rgba(255,255,255,0.92)" driftX={2} duration={7} reduce={reduce} />
           </>
         )}
 
         {key === "partly-cloudy" && (
           <>
             {isDay ? <SunCore reduce={reduce} cx={14} cy={14} r={5.5} /> : <MoonCore reduce={reduce} cx={14} cy={14} r={5.5} />}
-            <CloudShape reduce={reduce} driftX={2.5} duration={6.5} fill="rgba(255,255,255,0.95)" d="M9 26c-3.3 0-6-2.6-6-5.8 0-3 2.3-5.4 5.2-5.7 1-2.8 3.7-4.8 6.9-4.8 3.9 0 7.2 3 7.6 6.8 2.6.4 4.6 2.7 4.6 5.5 0 3.1-2.6 5.8-5.9 5.8H9z" />
+            <CloudLayer cx={20} cy={24} scale={0.46} fill="rgba(255,255,255,0.95)" driftX={2.5} duration={6.5} reduce={reduce} />
           </>
         )}
 
         {key === "overcast" && (
           <>
-            <CloudShape reduce={reduce} driftX={2} duration={8} fill="rgba(210,224,238,0.85)" d="M6 18c-2.5 0-4.6-2-4.6-4.5 0-2.3 1.7-4.2 4-4.4.9-2.1 3-3.6 5.4-3.6 3 0 5.5 2.2 5.9 5.1 2 .3 3.6 2 3.6 4.1 0 2.3-1.9 4.2-4.2 4.2H6z" />
-            <CloudShape reduce={reduce} driftX={2.6} duration={6} delay={0.6} fill="rgba(235,242,248,0.95)" d="M9 29c-3.3 0-6-2.6-6-5.8 0-3 2.3-5.4 5.2-5.7 1-2.8 3.7-4.8 6.9-4.8 3.9 0 7.2 3 7.6 6.8 2.6.4 4.6 2.7 4.6 5.5 0 3.1-2.6 5.8-5.9 5.8H9z" />
+            <CloudLayer cx={16} cy={16} scale={0.36} fill="rgba(210,224,238,0.85)" driftX={2} duration={8} reduce={reduce} />
+            <CloudLayer cx={21} cy={25} scale={0.46} fill="rgba(235,242,248,0.95)" driftX={2.6} duration={6} delay={0.6} reduce={reduce} />
           </>
         )}
 
-        {key === "fog" && <FogLines reduce={reduce} />}
+        {key === "fog" && <FogBands w={w} h={h} reduce={reduce} />}
 
         {key === "drizzle" && (
           <>
-            <path d="M8 20c-2.8 0-5-2.2-5-5s2.2-5 5-5c.8-2.3 3-4 5.6-4 3.2 0 5.8 2.5 6.1 5.6 2.1.4 3.6 2.2 3.6 4.4 0 2.5-2 4.5-4.5 4.5H8z" fill="rgba(220,232,244,0.95)" />
-            <RainDrops reduce={reduce} xs={[10, 16, 22, 28]} fromY={20} toY={28} speed={1.3} color="#90CAF9" />
+            <CloudLayer cx={16} cy={16} scale={0.36} fill="rgba(220,232,244,0.95)" driftX={2} duration={7} reduce={reduce} />
+            <g transform="translate(0,10)"><RainField w={w} h={h - 10} count={12} heavy={false} angle={6} reduce={reduce} /></g>
           </>
         )}
 
         {(key === "rain" || key === "rain-heavy") && (
           <>
-            <path d="M7 19c-3 0-5.5-2.4-5.5-5.4 0-2.7 2-4.9 4.6-5.3.9-2.5 3.3-4.3 6.1-4.3 3.5 0 6.4 2.7 6.7 6.1 2.3.4 4.1 2.4 4.1 4.9 0 2.7-2.3 5-5.1 5H7z" fill="rgba(140,180,224,0.95)" />
-            <RainDrops reduce={reduce} xs={key === "rain-heavy" ? [7, 12, 17, 22, 27, 32] : [9, 15, 21, 27]} fromY={19} toY={30} speed={key === "rain-heavy" ? 0.55 : 0.85} color={key === "rain-heavy" ? "#1E88E5" : "#42A5F5"} />
+            <CloudLayer cx={16} cy={15} scale={0.36} fill="rgba(140,180,224,0.95)" driftX={2} duration={6} reduce={reduce} />
+            <g transform="translate(0,9)">
+              <RainField w={w} h={h - 9} count={key === "rain-heavy" ? 26 : 18} heavy={key === "rain-heavy"} angle={key === "rain-heavy" ? 14 : 8} reduce={reduce} />
+            </g>
           </>
         )}
 
         {key === "snow" && (
           <>
-            <path d="M7 18c-2.8 0-5-2.2-5-5s2.2-5 5-5c.8-2.2 2.9-3.8 5.4-3.8 3.1 0 5.6 2.4 5.9 5.5 2 .4 3.5 2.1 3.5 4.2 0 2.4-2 4.4-4.4 4.4H7z" fill="rgba(220,232,244,0.95)" />
-            <SnowFlakes reduce={reduce} xs={[9, 14, 19, 24, 29]} />
+            <CloudLayer cx={15} cy={14} scale={0.34} fill="rgba(220,232,244,0.95)" driftX={2} duration={7} reduce={reduce} />
+            <g transform="translate(0,8)"><SnowField w={w} h={h - 8} count={16} reduce={reduce} /></g>
           </>
         )}
 
         {key === "shower" && (
           <>
-            <path d="M9 20c-3.3 0-6-2.6-6-5.8 0-3 2.3-5.4 5.2-5.7 1-2.8 3.7-4.8 6.9-4.8 3.9 0 7.2 3 7.6 6.8 2.6.4 4.6 2.7 4.6 5.5H9z" fill="rgba(120,160,208,0.95)" />
-            <RainDrops reduce={reduce} xs={[11, 17, 23, 29]} fromY={20} toY={30} speed={0.7} color="#64B5F6" />
+            <CloudLayer cx={17} cy={15} scale={0.4} fill="rgba(120,160,208,0.95)" driftX={2} duration={6} reduce={reduce} />
+            <g transform="translate(0,9)"><RainField w={w} h={h - 9} count={20} heavy={false} angle={10} reduce={reduce} /></g>
           </>
         )}
 
         {key === "thunderstorm" && (
           <>
-            <path d="M8 18c-3 0-5.5-2.4-5.5-5.4 0-2.7 2-4.9 4.6-5.3.9-2.5 3.3-4.3 6.1-4.3 3.5 0 6.4 2.7 6.7 6.1 2.3.4 4.1 2.4 4.1 4.9 0 2.7-2.3 5-5.1 5H8z" fill="rgba(70,86,120,0.95)" />
-            <RainDrops reduce={reduce} xs={[9, 27]} fromY={18} toY={27} speed={0.8} color="#5C7CB8" />
-            <LightningBolt reduce={reduce} />
+            <CloudLayer cx={16} cy={14} scale={0.36} fill="rgba(70,86,120,0.95)" driftX={1.6} duration={5} reduce={reduce} />
+            <g transform="translate(0,9)"><RainField w={w} h={h - 9} count={20} heavy angle={14} reduce={reduce} /></g>
+            <motion.path
+              d="M20 14l-4.5 7h3.4l-3.9 6.5 6.4-8h-3.6l3.6-5.5z"
+              fill="#FFD600"
+              animate={reduce ? { opacity: 1 } : { opacity: [0, 0, 1, 0.3, 1, 0, 0, 0] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "linear", repeatDelay: 1.4, times: [0, 0.55, 0.6, 0.65, 0.72, 0.78, 0.9, 1] }}
+            />
           </>
         )}
       </g>
@@ -266,24 +321,105 @@ function WeatherScene({ code, size = 40, isDay = true }) {
   );
 }
 
-// ─── Small line icons for the detail grid (all SVG, no emoji) ───
+// ─── Full atmospheric hero scene for the expanded card ───
+
+function WeatherHero({ code, isDay, w = 240, h = 300 }) {
+  const reduce = useReducedMotion();
+  const key = WMO_CODES[code]?.key || "clear";
+  const cx = w * 0.68, cy = h * 0.24;
+
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid slice" style={{ position: "absolute", inset: 0 }}>
+      <defs>
+        <radialGradient id="heroSunGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#FFE9B0" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#FFE9B0" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="heroMoonGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#D6E0F5" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#D6E0F5" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {key === "clear" && (isDay
+        ? <SunCore reduce={reduce} cx={cx} cy={cy} r={30} />
+        : <><MoonCore reduce={reduce} cx={cx} cy={cy} r={26} /><StarField w={w} h={h} count={22} reduce={reduce} /></>
+      )}
+
+      {key === "mostly-clear" && (
+        <>
+          {isDay ? <SunCore reduce={reduce} cx={cx} cy={cy} r={26} /> : <><MoonCore reduce={reduce} cx={cx} cy={cy} r={24} /><StarField w={w} h={h} count={16} reduce={reduce} /></>}
+          <CloudLayer cx={w * 0.4} cy={h * 0.62} scale={2.4} fill="rgba(255,255,255,0.94)" driftX={8} duration={9} reduce={reduce} />
+        </>
+      )}
+
+      {key === "partly-cloudy" && (
+        <>
+          {isDay ? <SunCore reduce={reduce} cx={cx} cy={cy * 0.9} r={24} /> : <><MoonCore reduce={reduce} cx={cx} cy={cy * 0.9} r={22} /><StarField w={w} h={h} count={14} reduce={reduce} /></>}
+          <CloudLayer cx={w * 0.38} cy={h * 0.55} scale={2.6} fill="rgba(255,255,255,0.96)" driftX={9} duration={8} reduce={reduce} />
+          <CloudLayer cx={w * 0.72} cy={h * 0.74} scale={1.9} fill="rgba(255,255,255,0.8)" driftX={7} duration={10} delay={0.8} reduce={reduce} />
+        </>
+      )}
+
+      {key === "overcast" && (
+        <>
+          <CloudLayer cx={w * 0.3} cy={h * 0.38} scale={2.2} fill="rgba(200,214,230,0.8)" driftX={7} duration={10} reduce={reduce} />
+          <CloudLayer cx={w * 0.68} cy={h * 0.55} scale={2.7} fill="rgba(220,232,244,0.92)" driftX={9} duration={8} delay={0.5} reduce={reduce} />
+          <CloudLayer cx={w * 0.42} cy={h * 0.78} scale={2.1} fill="rgba(232,240,248,0.96)" driftX={6} duration={7} delay={1.1} reduce={reduce} />
+        </>
+      )}
+
+      {key === "fog" && <FogBands w={w} h={h} reduce={reduce} />}
+
+      {key === "drizzle" && (
+        <>
+          <CloudLayer cx={w * 0.5} cy={h * 0.28} scale={2.6} fill="rgba(220,232,244,0.95)" driftX={7} duration={8} reduce={reduce} />
+          <g transform={`translate(0,${h * 0.32})`}><RainField w={w} h={h * 0.68} count={30} heavy={false} angle={6} reduce={reduce} /></g>
+        </>
+      )}
+
+      {(key === "rain" || key === "rain-heavy") && (
+        <>
+          <CloudLayer cx={w * 0.5} cy={h * 0.26} scale={2.8} fill={key === "rain-heavy" ? "rgba(90,124,168,0.95)" : "rgba(140,180,224,0.95)"} driftX={6} duration={6.5} reduce={reduce} />
+          <g transform={`translate(0,${h * 0.3})`}>
+            <RainField w={w} h={h * 0.7} count={key === "rain-heavy" ? 62 : 42} heavy={key === "rain-heavy"} angle={key === "rain-heavy" ? 16 : 9} reduce={reduce} />
+          </g>
+        </>
+      )}
+
+      {key === "snow" && (
+        <>
+          <CloudLayer cx={w * 0.5} cy={h * 0.26} scale={2.5} fill="rgba(220,232,244,0.95)" driftX={6} duration={8} reduce={reduce} />
+          <g transform={`translate(0,${h * 0.3})`}><SnowField w={w} h={h * 0.7} count={40} reduce={reduce} /></g>
+        </>
+      )}
+
+      {key === "shower" && (
+        <>
+          <CloudLayer cx={w * 0.55} cy={h * 0.26} scale={2.6} fill="rgba(120,160,208,0.95)" driftX={6} duration={6.5} reduce={reduce} />
+          <g transform={`translate(0,${h * 0.3})`}><RainField w={w} h={h * 0.7} count={38} heavy={false} angle={10} reduce={reduce} /></g>
+        </>
+      )}
+
+      {key === "thunderstorm" && (
+        <>
+          <LightningFlash w={w} h={h} reduce={reduce} />
+          <CloudLayer cx={w * 0.5} cy={h * 0.24} scale={2.9} fill="rgba(55,66,96,0.96)" driftX={4} duration={5} reduce={reduce} />
+          <g transform={`translate(0,${h * 0.3})`}><RainField w={w} h={h * 0.7} count={54} heavy angle={16} reduce={reduce} /></g>
+        </>
+      )}
+    </svg>
+  );
+}
+
+// ─── Small line icons for the detail grid ───
 
 function DropletIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M12 3s7 7.5 7 12.2A7 7 0 0 1 5 15.2C5 10.5 12 3 12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3s7 7.5 7 12.2A7 7 0 0 1 5 15.2C5 10.5 12 3 12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>;
 }
-
 function WindIcon({ rotate = 0 }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: `rotate(${rotate}deg)` }}>
-      <path d="M12 20V6M6 10l6-6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: `rotate(${rotate}deg)` }}><path d="M12 20V6M6 10l6-6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
-
 function GaugeIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -293,35 +429,22 @@ function GaugeIcon() {
     </svg>
   );
 }
-
 function UvIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
-      {Array.from({ length: 8 }).map((_, i) => {
+      {range(8).map((i) => {
         const a = (i * Math.PI) / 4;
-        const x1 = 12 + Math.cos(a) * 7.2, y1 = 12 + Math.sin(a) * 7.2;
-        const x2 = 12 + Math.cos(a) * 10, y2 = 12 + Math.sin(a) * 10;
-        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />;
+        return <line key={i} x1={12 + Math.cos(a) * 7.2} y1={12 + Math.sin(a) * 7.2} x2={12 + Math.cos(a) * 10} y2={12 + Math.sin(a) * 10} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />;
       })}
     </svg>
   );
 }
-
 function ThermoIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>;
 }
-
 function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
 }
 
 function uvLabel(uv) {
@@ -339,22 +462,20 @@ function windDirLabel(deg) {
   return dirs[Math.round(deg / 45) % 8];
 }
 
-// Signature element: an arc tracing the sun's path between sunrise and
-// sunset, with a marker at the current position.
 function DayArc({ sunrise, sunset, isDay }) {
   if (!sunrise || !sunset) return null;
   const now = Date.now();
   const total = sunset.getTime() - sunrise.getTime();
   const elapsed = now - sunrise.getTime();
   const frac = Math.min(1, Math.max(0, elapsed / total));
-  const cx = 90, cy = 60, r = 58;
+  const cx = 80, cy = 52, r = 50;
   const angle = Math.PI * (1 - frac);
   const mx = cx - r * Math.cos(angle);
   const my = cy - r * Math.sin(angle);
 
   return (
     <div className="weather-arc">
-      <svg width="180" height="72" viewBox="0 0 180 72" fill="none">
+      <svg width="160" height="62" viewBox="0 0 160 62" fill="none">
         <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${cx + r} ${cy}`} stroke="rgba(255,255,255,0.22)" strokeWidth="2" strokeDasharray="1 5" strokeLinecap="round" />
         {isDay && frac > 0 && frac < 1 && (
           <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${mx} ${my}`} stroke="rgba(255,217,61,0.85)" strokeWidth="2" strokeLinecap="round" />
@@ -362,14 +483,9 @@ function DayArc({ sunrise, sunset, isDay }) {
         <circle cx={cx - r} cy={cy} r="2.5" fill="rgba(255,255,255,0.5)" />
         <circle cx={cx + r} cy={cy} r="2.5" fill="rgba(255,255,255,0.5)" />
         {isDay && frac >= 0 && frac <= 1 && (
-          <motion.circle
-            cx={mx}
-            cy={my}
-            r="5.5"
-            fill="#FFD93D"
+          <motion.circle cx={mx} cy={my} r="5" fill="#FFD93D"
             animate={{ opacity: [0.85, 1, 0.85] }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-          />
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }} />
         )}
       </svg>
       <div className="weather-arc-labels">
@@ -437,7 +553,6 @@ export default function WeatherWidget({ animSpeed = 1 }) {
     return () => { mounted = false; clearInterval(interval); };
   }, []);
 
-  // Lock page scroll while the full-screen view is open, and let Escape close it.
   useEffect(() => {
     if (!expanded) return;
     const prevOverflow = document.body.style.overflow;
@@ -508,23 +623,24 @@ export default function WeatherWidget({ animSpeed = 1 }) {
                 <CloseIcon />
               </button>
 
-              <div className="weather-sheet-header" style={{ background: `linear-gradient(150deg, ${c1}, ${c2})` }}>
-                <div className="weather-sheet-header-glow" />
-                <div className="weather-sheet-icon">
-                  <WeatherScene code={weather.code} size={84} isDay={weather.isDay} />
+              {/* Left: atmospheric hero panel */}
+              <div className="weather-sheet-hero" style={{ background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
+                <WeatherHero code={weather.code} isDay={weather.isDay} />
+                <div className="weather-sheet-hero-content">
+                  <span className="weather-sheet-temp">{weather.temp}°</span>
+                  <span className="weather-sheet-cond">{weather.label}</span>
+                  <span className="weather-sheet-feels">รู้สึกเหมือน {weather.feelsLike}°</span>
+                  {weather.tempMax != null && (
+                    <div className="weather-sheet-minmax">
+                      <span>สูงสุด {weather.tempMax}°</span>
+                      <span className="weather-sheet-minmax-dot" />
+                      <span>ต่ำสุด {weather.tempMin}°</span>
+                    </div>
+                  )}
                 </div>
-                <span className="weather-sheet-temp">{weather.temp}°</span>
-                <span className="weather-sheet-cond">{weather.label}</span>
-                <span className="weather-sheet-feels">รู้สึกเหมือน {weather.feelsLike}°</span>
-                {weather.tempMax != null && (
-                  <div className="weather-sheet-minmax">
-                    <span>สูงสุด {weather.tempMax}°</span>
-                    <span className="weather-sheet-minmax-dot" />
-                    <span>ต่ำสุด {weather.tempMin}°</span>
-                  </div>
-                )}
               </div>
 
+              {/* Right: details */}
               <div className="weather-sheet-body">
                 <DayArc sunrise={weather.sunrise} sunset={weather.sunset} isDay={weather.isDay} />
 
@@ -575,11 +691,6 @@ export default function WeatherWidget({ animSpeed = 1 }) {
 function WeatherStyles() {
   return (
     <style>{`
-      /* Collapsed pill — the button itself is the flex/centering context,
-         with no intermediate wrapper, and every child sits on the same
-         cross-axis center with line-height locked to 1 so text glyphs
-         (including tall Thai vowel/tone marks) don't push the optical
-         center down relative to the icon. */
       .weather-widget {
         display: inline-flex;
         align-items: center;
@@ -601,42 +712,14 @@ function WeatherStyles() {
       }
       .weather-widget:hover { background: rgba(255, 255, 255, 0.1); }
       .weather-widget--loading {
-        width: 34px;
-        height: 34px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 34px; height: 34px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
         background: rgba(255, 255, 255, 0.06);
       }
-      .weather-icon-wrap {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        line-height: 0;
-      }
-      .weather-temp {
-        display: flex;
-        align-items: center;
-        line-height: 1;
-        font-size: 14px;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        color: #fff;
-        white-space: nowrap;
-      }
-      .weather-label {
-        display: flex;
-        align-items: center;
-        line-height: 1;
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.7);
-        white-space: nowrap;
-      }
+      .weather-icon-wrap { display: flex; align-items: center; justify-content: center; flex-shrink: 0; line-height: 0; }
+      .weather-temp { display: flex; align-items: center; line-height: 1; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; white-space: nowrap; }
+      .weather-label { display: flex; align-items: center; line-height: 1; font-size: 13px; color: rgba(255, 255, 255, 0.7); white-space: nowrap; }
 
-      /* Full-screen detail view — transparent, blurred backdrop over
-         whatever sits behind it (glassmorphism, not a solid modal). */
       .weather-overlay {
         position: fixed;
         inset: 0;
@@ -651,12 +734,17 @@ function WeatherStyles() {
         -webkit-backdrop-filter: blur(36px) saturate(150%);
       }
 
+      /* Horizontal card: hero scene on the left, details on the right,
+         both sides sharing the same height. */
       .weather-sheet {
         position: relative;
-        width: min(400px, 100%);
-        max-height: min(720px, 92vh);
-        overflow-y: auto;
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        width: min(640px, 100%);
+        max-height: 92vh;
         border-radius: 28px;
+        overflow: hidden;
         background: rgba(255, 255, 255, 0.08);
         border: 1px solid rgba(255, 255, 255, 0.14);
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -668,111 +756,71 @@ function WeatherStyles() {
 
       .weather-close {
         position: absolute;
-        top: 16px;
-        right: 16px;
-        z-index: 2;
-        width: 32px;
-        height: 32px;
+        top: 14px; right: 14px;
+        z-index: 3;
+        width: 32px; height: 32px;
         border-radius: 50%;
         border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.22);
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.28);
         color: #fff;
         cursor: pointer;
         backdrop-filter: blur(8px);
       }
-      .weather-close:hover { background: rgba(0, 0, 0, 0.34); }
+      .weather-close:hover { background: rgba(0, 0, 0, 0.42); }
 
-      .weather-sheet-header {
+      .weather-sheet-hero {
         position: relative;
+        flex: 0 0 240px;
         overflow: hidden;
-        padding: 40px 28px 28px;
+        display: flex;
+        align-items: flex-end;
+      }
+      .weather-sheet-hero-content {
+        position: relative;
+        z-index: 2;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        text-align: center;
+        padding: 24px;
+        text-shadow: 0 3px 14px rgba(0,0,0,0.2);
       }
-      .weather-sheet-header-glow {
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(220px 140px at 80% -10%, rgba(255,255,255,0.35), transparent 70%);
-        pointer-events: none;
-      }
-      .weather-sheet-icon { filter: drop-shadow(0 6px 16px rgba(0,0,0,0.18)); margin-bottom: 4px; }
-      .weather-sheet-temp {
-        font-size: 64px;
-        font-weight: 700;
-        line-height: 1;
-        letter-spacing: -0.02em;
-        text-shadow: 0 3px 14px rgba(0,0,0,0.18);
-      }
-      .weather-sheet-cond { margin-top: 8px; font-size: 17px; font-weight: 600; }
-      .weather-sheet-feels { margin-top: 2px; font-size: 13px; color: rgba(255,255,255,0.85); }
-      .weather-sheet-minmax {
-        margin-top: 14px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        color: rgba(255,255,255,0.9);
-        font-variant-numeric: tabular-nums;
-      }
-      .weather-sheet-minmax-dot {
-        width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.5);
-      }
+      .weather-sheet-temp { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+      .weather-sheet-cond { margin-top: 8px; font-size: 16px; font-weight: 600; }
+      .weather-sheet-feels { margin-top: 2px; font-size: 12.5px; color: rgba(255,255,255,0.85); }
+      .weather-sheet-minmax { margin-top: 12px; display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
+      .weather-sheet-minmax-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.5); }
 
-      .weather-sheet-body { padding: 22px 24px 26px; }
+      .weather-sheet-body { flex: 1; min-width: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; }
 
       .weather-arc { display: flex; flex-direction: column; align-items: center; }
-      .weather-arc-labels {
-        display: flex;
-        justify-content: space-between;
-        width: 180px;
-        margin-top: -8px;
-        font-size: 11.5px;
-        color: rgba(255,255,255,0.6);
-        font-variant-numeric: tabular-nums;
-      }
+      .weather-arc-labels { display: flex; justify-content: space-between; width: 160px; margin-top: -8px; font-size: 11px; color: rgba(255,255,255,0.6); font-variant-numeric: tabular-nums; }
       .weather-arc-labels span:nth-child(2) { color: rgba(255,255,255,0.42); }
 
       .weather-stat-grid {
+        width: 100%;
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 10px;
-        margin-top: 20px;
+        margin-top: 18px;
       }
       .weather-stat-card {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
-        padding: 14px 12px;
-        border-radius: 16px;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+        padding: 12px 11px;
+        border-radius: 15px;
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.08);
         color: rgba(255,255,255,0.85);
       }
       .weather-stat-card--muted { color: rgba(255,255,255,0.55); }
-      .weather-stat-card-value {
-        font-size: 14px;
-        font-weight: 600;
-        color: rgba(255,255,255,0.97);
-        font-variant-numeric: tabular-nums;
-      }
-      .weather-stat-card-label {
-        font-size: 10.5px;
-        color: rgba(255,255,255,0.55);
-        line-height: 1.3;
-      }
+      .weather-stat-card-value { font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.97); font-variant-numeric: tabular-nums; }
+      .weather-stat-card-label { font-size: 10px; color: rgba(255,255,255,0.55); line-height: 1.3; }
 
-      .weather-spinner {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 2px solid rgba(255, 255, 255, 0.25);
-        border-top-color: rgba(255, 255, 255, 0.85);
+      .weather-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: rgba(255, 255, 255, 0.85); }
+
+      @media (max-width: 560px) {
+        .weather-sheet { flex-direction: column; width: 100%; max-height: 90vh; }
+        .weather-sheet-hero { flex: 0 0 200px; }
+        .weather-sheet-body { overflow-y: auto; }
       }
 
       @media (prefers-reduced-motion: reduce) {
