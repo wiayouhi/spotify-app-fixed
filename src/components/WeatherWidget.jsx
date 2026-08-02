@@ -614,10 +614,10 @@ export default function WeatherWidget({ animSpeed = 1 }) {
             <motion.div
               className="weather-sheet"
               onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, y: 24, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 16, scale: 0.97 }}
-              transition={{ duration: dur(0.35), ease: [0.16, 1, 0.3, 1] }}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ duration: dur(0.45), ease: [0.19, 1, 0.22, 1] }}
             >
               <button type="button" className="weather-close" onClick={() => setExpanded(false)} aria-label="ปิด">
                 <CloseIcon />
@@ -626,7 +626,12 @@ export default function WeatherWidget({ animSpeed = 1 }) {
               {/* Left: atmospheric hero panel */}
               <div className="weather-sheet-hero" style={{ background: `linear-gradient(160deg, ${c1}, ${c2})` }}>
                 <WeatherHero code={weather.code} isDay={weather.isDay} />
-                <div className="weather-sheet-hero-content">
+                <motion.div
+                  className="weather-sheet-hero-content"
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: dur(0.45), delay: dur(0.1), ease: [0.16, 1, 0.3, 1] }}
+                >
                   <span className="weather-sheet-temp">{weather.temp}°</span>
                   <span className="weather-sheet-cond">{weather.label}</span>
                   <span className="weather-sheet-feels">รู้สึกเหมือน {weather.feelsLike}°</span>
@@ -637,48 +642,44 @@ export default function WeatherWidget({ animSpeed = 1 }) {
                       <span>ต่ำสุด {weather.tempMin}°</span>
                     </div>
                   )}
-                </div>
+                </motion.div>
               </div>
 
               {/* Right: details */}
               <div className="weather-sheet-body">
-                <DayArc sunrise={weather.sunrise} sunset={weather.sunset} isDay={weather.isDay} />
+                <motion.div
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: dur(0.45), delay: dur(0.16), ease: [0.16, 1, 0.3, 1] }}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}
+                >
+                  <DayArc sunrise={weather.sunrise} sunset={weather.sunset} isDay={weather.isDay} />
 
-                <div className="weather-stat-grid">
-                  <div className="weather-stat-card">
-                    <DropletIcon />
-                    <span className="weather-stat-card-value">{weather.humidity}%</span>
-                    <span className="weather-stat-card-label">ความชื้น</span>
+                  <div className="weather-stat-grid">
+                    {[
+                      { icon: <DropletIcon />, value: `${weather.humidity}%`, label: "ความชื้น" },
+                      { icon: <WindIcon rotate={(weather.windDir ?? 0) + 180} />, value: `${weather.wind} กม./ชม.`, label: windDirLabel(weather.windDir) },
+                      { icon: <GaugeIcon />, value: `${weather.pressure}`, label: "hPa" },
+                      { icon: <UvIcon />, value: `${weather.uv ?? "-"}`, label: `ดัชนี UV ${uvLabel(weather.uv)}` },
+                      { icon: <ThermoIcon />, value: `${weather.feelsLike}°`, label: "รู้สึกเหมือน" },
+                      updatedAt
+                        ? { icon: null, value: updatedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }), label: "อัปเดตล่าสุด", muted: true }
+                        : null,
+                    ].filter(Boolean).map((s, i) => (
+                      <motion.div
+                        key={i}
+                        className={`weather-stat-card${s.muted ? " weather-stat-card--muted" : ""}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: dur(0.35), delay: dur(0.2) + i * dur(0.04), ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        {s.icon}
+                        <span className="weather-stat-card-value">{s.value}</span>
+                        <span className="weather-stat-card-label">{s.label}</span>
+                      </motion.div>
+                    ))}
                   </div>
-                  <div className="weather-stat-card">
-                    <WindIcon rotate={(weather.windDir ?? 0) + 180} />
-                    <span className="weather-stat-card-value">{weather.wind} กม./ชม.</span>
-                    <span className="weather-stat-card-label">{windDirLabel(weather.windDir)}</span>
-                  </div>
-                  <div className="weather-stat-card">
-                    <GaugeIcon />
-                    <span className="weather-stat-card-value">{weather.pressure}</span>
-                    <span className="weather-stat-card-label">hPa</span>
-                  </div>
-                  <div className="weather-stat-card">
-                    <UvIcon />
-                    <span className="weather-stat-card-value">{weather.uv ?? "-"}</span>
-                    <span className="weather-stat-card-label">ดัชนี UV {uvLabel(weather.uv)}</span>
-                  </div>
-                  <div className="weather-stat-card">
-                    <ThermoIcon />
-                    <span className="weather-stat-card-value">{weather.feelsLike}°</span>
-                    <span className="weather-stat-card-label">รู้สึกเหมือน</span>
-                  </div>
-                  {updatedAt && (
-                    <div className="weather-stat-card weather-stat-card--muted">
-                      <span className="weather-stat-card-value">
-                        {updatedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                      <span className="weather-stat-card-label">อัปเดตล่าสุด</span>
-                    </div>
-                  )}
-                </div>
+                </motion.div>
               </div>
             </motion.div>
           </motion.div>
@@ -725,40 +726,32 @@ function WeatherStyles() {
         inset: 0;
         z-index: 1000;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        box-sizing: border-box;
         background: rgba(8, 12, 22, 0.28);
         backdrop-filter: blur(36px) saturate(150%);
         -webkit-backdrop-filter: blur(36px) saturate(150%);
       }
 
-      /* Horizontal card: hero scene on the left, details on the right,
-         both sides sharing the same height. */
+      /* True full-screen: no floating card, no margins, no rounding —
+         the sheet itself is the entire viewport. Hero on the left,
+         details on the right, both stretched to full height. */
       .weather-sheet {
         position: relative;
         display: flex;
         flex-direction: row;
         align-items: stretch;
-        width: min(640px, 100%);
-        max-height: 92vh;
-        border-radius: 28px;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(24px) saturate(160%);
-        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        background: rgba(255, 255, 255, 0.05);
         color: #fff;
         font-family: inherit;
       }
 
       .weather-close {
         position: absolute;
-        top: 14px; right: 14px;
+        top: 20px; right: 20px;
         z-index: 3;
-        width: 32px; height: 32px;
+        width: 38px; height: 38px;
         border-radius: 50%;
         border: none;
         display: flex; align-items: center; justify-content: center;
@@ -771,7 +764,9 @@ function WeatherStyles() {
 
       .weather-sheet-hero {
         position: relative;
-        flex: 0 0 240px;
+        flex: 0 0 40%;
+        min-width: 320px;
+        max-width: 560px;
         overflow: hidden;
         display: flex;
         align-items: flex-end;
@@ -781,16 +776,26 @@ function WeatherStyles() {
         z-index: 2;
         display: flex;
         flex-direction: column;
-        padding: 24px;
+        padding: 48px;
         text-shadow: 0 3px 14px rgba(0,0,0,0.2);
       }
-      .weather-sheet-temp { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-      .weather-sheet-cond { margin-top: 8px; font-size: 16px; font-weight: 600; }
-      .weather-sheet-feels { margin-top: 2px; font-size: 12.5px; color: rgba(255,255,255,0.85); }
-      .weather-sheet-minmax { margin-top: 12px; display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
+      .weather-sheet-temp { font-size: 88px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+      .weather-sheet-cond { margin-top: 10px; font-size: 20px; font-weight: 600; }
+      .weather-sheet-feels { margin-top: 4px; font-size: 14px; color: rgba(255,255,255,0.85); }
+      .weather-sheet-minmax { margin-top: 16px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
       .weather-sheet-minmax-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.5); }
 
-      .weather-sheet-body { flex: 1; min-width: 0; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; align-items: center; }
+      .weather-sheet-body {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .weather-sheet-body > div { max-width: 460px; }
 
       .weather-arc { display: flex; flex-direction: column; align-items: center; }
       .weather-arc-labels { display: flex; justify-content: space-between; width: 160px; margin-top: -8px; font-size: 11px; color: rgba(255,255,255,0.6); font-variant-numeric: tabular-nums; }
@@ -800,27 +805,29 @@ function WeatherStyles() {
         width: 100%;
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin-top: 18px;
+        gap: 12px;
+        margin-top: 22px;
       }
       .weather-stat-card {
-        display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-        padding: 12px 11px;
-        border-radius: 15px;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 7px;
+        padding: 16px 14px;
+        border-radius: 16px;
         background: rgba(255,255,255,0.06);
         border: 1px solid rgba(255,255,255,0.08);
         color: rgba(255,255,255,0.85);
       }
       .weather-stat-card--muted { color: rgba(255,255,255,0.55); }
-      .weather-stat-card-value { font-size: 13.5px; font-weight: 600; color: rgba(255,255,255,0.97); font-variant-numeric: tabular-nums; }
-      .weather-stat-card-label { font-size: 10px; color: rgba(255,255,255,0.55); line-height: 1.3; }
+      .weather-stat-card-value { font-size: 14.5px; font-weight: 600; color: rgba(255,255,255,0.97); font-variant-numeric: tabular-nums; }
+      .weather-stat-card-label { font-size: 10.5px; color: rgba(255,255,255,0.55); line-height: 1.3; }
 
       .weather-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: rgba(255, 255, 255, 0.85); }
 
-      @media (max-width: 560px) {
-        .weather-sheet { flex-direction: column; width: 100%; max-height: 90vh; }
-        .weather-sheet-hero { flex: 0 0 200px; }
-        .weather-sheet-body { overflow-y: auto; }
+      @media (max-width: 640px) {
+        .weather-sheet { flex-direction: column; }
+        .weather-sheet-hero { flex: 0 0 42%; min-width: 0; max-width: none; }
+        .weather-sheet-hero-content { padding: 28px 24px; }
+        .weather-sheet-temp { font-size: 60px; }
+        .weather-sheet-body { overflow-y: auto; padding: 20px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
