@@ -89,28 +89,16 @@ export default function PlayerControls({
   return (
     <AnimatePresence>
       <motion.div
-        className="player-controls"
+        className="player-controls-wrap"
         variants={barVariants}
         initial="hidden"
         animate="visible"
         exit="hidden"
       >
-        {/* วงแหวนกระเพื่อมออกจากศูนย์กลางตอนเปิดตัว */}
-        <motion.span
-          className="entry-ripple"
-          initial={{ opacity: 0.9, scale: 0.2 }}
-          animate={{ opacity: 0, scale: 2.4 }}
-          transition={{ duration: dur(0.9), ease: "easeOut" }}
-        />
-
-        {/* ฮาโล่เรืองแสงหมุนช้าๆ ด้านหลัง — วิ่งตลอดเวลาไม่หยุด */}
-        <span className="controls-halo" />
-        <span className="controls-halo reverse" />
-
-        {/* สุ่มเพลง */}
+        {/* สุ่มเพลง — อยู่นอกกรอบกระจก ลอยเดี่ยวๆ ด้านซ้าย */}
         <motion.button
           variants={sideVariants(-60, -65)}
-          className={`control-btn mini-btn ${isShuffleOn ? "is-active" : ""}`}
+          className={`control-btn mini-btn outside-btn ${isShuffleOn ? "is-active" : ""}`}
           onClick={handleToggleShuffle}
           title={isShuffleOn ? "Shuffle: on" : "Shuffle: off"}
           whileHover={{ scale: 1.14 }}
@@ -124,6 +112,16 @@ export default function PlayerControls({
             </svg>
           </span>
         </motion.button>
+
+        {/* กรอบกระจกหลัก — เหลือแค่ ก่อนหน้า / เล่น-หยุด / ถัดไป */}
+        <div className="player-controls">
+        {/* วงแหวนกระเพื่อมออกจากศูนย์กลางตอนเปิดตัว */}
+        <motion.span
+          className="entry-ripple"
+          initial={{ opacity: 0.9, scale: 0.2 }}
+          animate={{ opacity: 0, scale: 2.4 }}
+          transition={{ duration: dur(0.9), ease: "easeOut" }}
+        />
 
         <motion.button
           variants={sideVariants(-40, -50)}
@@ -239,11 +237,12 @@ export default function PlayerControls({
             </svg>
           </span>
         </motion.button>
+        </div>
 
-        {/* วนเพลง (off / เล่นซ้ำทั้งลิสต์ / เล่นซ้ำเพลงเดียว) */}
+        {/* วนเพลง — อยู่นอกกรอบกระจก ลอยเดี่ยวๆ ด้านขวา */}
         <motion.button
           variants={sideVariants(60, 65)}
-          className={`control-btn mini-btn ${currentRepeat !== "off" ? "is-active" : ""}`}
+          className={`control-btn mini-btn outside-btn ${currentRepeat !== "off" ? "is-active" : ""}`}
           onClick={handleCycleRepeat}
           title={
             currentRepeat === "off"
@@ -278,6 +277,26 @@ export default function PlayerControls({
         </motion.button>
 
         <style>{`
+          .player-controls-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            width: fit-content;
+          }
+
+          /* ปุ่มสุ่ม/วน ลอยอิสระนอกกรอบกระจก ไม่มีพื้นหลังจนกว่าจะ hover/active */
+          .outside-btn {
+            background: transparent;
+          }
+          .outside-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 14px rgba(255, 255, 255, 0.12);
+          }
+          .outside-btn.is-active {
+            background: rgba(255, 255, 255, 0.14);
+          }
+
           .player-controls {
             position: relative;
             display: flex;
@@ -322,43 +341,6 @@ export default function PlayerControls({
             box-shadow: 0 0 40px rgba(255, 255, 255, 0.35);
             pointer-events: none;
             z-index: -1;
-          }
-
-          /* ฮาโล่หมุนช้าๆ อยู่ด้านหลัง ให้ความรู้สึกพรีเมียม/มีชีวิต ตลอดเวลา */
-          .controls-halo {
-            position: absolute;
-            inset: -55%;
-            z-index: -1;
-            border-radius: 50%;
-            background: conic-gradient(
-              from 0deg,
-              rgba(255, 255, 255, 0) 0deg,
-              rgba(255, 255, 255, 0.3) 90deg,
-              rgba(210, 214, 224, 0.2) 180deg,
-              rgba(255, 255, 255, 0) 270deg,
-              rgba(255, 255, 255, 0) 360deg
-            );
-            filter: blur(34px);
-            animation: halo-spin 11s linear infinite;
-            pointer-events: none;
-          }
-          .controls-halo.reverse {
-            inset: -40%;
-            opacity: 0.6;
-            background: conic-gradient(
-              from 90deg,
-              rgba(255, 255, 255, 0) 0deg,
-              rgba(200, 205, 220, 0.22) 120deg,
-              rgba(255, 255, 255, 0) 240deg
-            );
-            filter: blur(26px);
-            animation: halo-spin-reverse 17s linear infinite;
-          }
-          @keyframes halo-spin {
-            to { transform: rotate(360deg); }
-          }
-          @keyframes halo-spin-reverse {
-            to { transform: rotate(-360deg); }
           }
 
           .control-btn {
@@ -558,8 +540,8 @@ export default function PlayerControls({
           }
 
           @media (prefers-reduced-motion: reduce) {
+            .player-controls-wrap,
             .player-controls,
-            .controls-halo,
             .control-btn,
             .icon-float,
             .play-btn-bg,
