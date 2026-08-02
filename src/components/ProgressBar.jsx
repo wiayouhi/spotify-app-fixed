@@ -92,17 +92,24 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           animate={{ width: `${progress * 100}%` }}
           transition={{ duration: 0.25, ease: "linear" }}
         >
-          {/* หนอน/งูเลื่อย: แถวจุดที่ยักขึ้น-ลงไล่กันเป็นคลื่น เหมือนตัวหนอนคืบ ต่อเนื่องตลอดเวลาตอนกำลังเล่น */}
-          <span className="worm-track">
-            {wormSegments.map((i) => (
-              <span
-                key={i}
-                className="worm-seg"
-                style={{ animationDelay: `${i * 0.09}s` }}
-              />
-            ))}
-          </span>
           <span className="fill-sheen" />
+        </motion.div>
+
+        {/* หนอน/งูเลื่อย: แถวจุดที่ยักขึ้น-ลงไล่กันเป็นคลื่น เหมือนตัวหนอนคืบ ต่อเนื่องตลอดเวลาตอนกำลังเล่น
+            แยกชั้นออกจาก fill เพื่อไม่ให้การยักถูกครอบตัดด้วยความสูงบางๆ ของแถบ */}
+        <motion.div
+          className="worm-track"
+          initial={{ width: 0 }}
+          animate={{ width: `${progress * 100}%` }}
+          transition={{ duration: 0.25, ease: "linear" }}
+        >
+          {wormSegments.map((i) => (
+            <span
+              key={i}
+              className="worm-seg"
+              style={{ animationDelay: `${i * 0.09}s` }}
+            />
+          ))}
         </motion.div>
 
         <motion.div
@@ -190,10 +197,13 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
         }
 
-        /* แถวปล้องหนอน กระจายเท่าๆ กันตามแนว fill */
+        /* แถวปล้องหนอน — วางซ้อนบนแถบ แต่ overflow visible เพื่อให้ยักได้เต็มที่ไม่ถูกตัด */
         .worm-track {
           position: absolute;
-          inset: 0;
+          top: 0;
+          bottom: 0;
+          left: 0;
+          overflow: visible;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -203,21 +213,21 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
         /* แต่ละปล้องยักขึ้น-ยักลงสลับกันไปเรื่อยๆ ให้เห็นเป็นคลื่นไล่กันเหมือนงู/หนอนคืบ */
         .worm-seg {
-          width: 3px;
-          height: 3px;
+          width: 3.5px;
+          height: 3.5px;
           border-radius: 50%;
-          background: rgba(90, 95, 110, 0.65);
+          background: rgba(80, 85, 100, 0.7);
           transform: translateY(0);
           opacity: 0.5;
-          animation: worm-bob 1.1s ease-in-out infinite;
+          animation: worm-bob 1s ease-in-out infinite;
           animation-play-state: paused;
         }
         .progress-track.is-playing .worm-seg {
           animation-play-state: running;
         }
         @keyframes worm-bob {
-          0%, 100% { transform: translateY(-2.5px); opacity: 0.35; }
-          50% { transform: translateY(2.5px); opacity: 0.85; }
+          0%, 100% { transform: translateY(-4.5px); opacity: 0.3; }
+          50% { transform: translateY(4.5px); opacity: 0.9; }
         }
 
         /* ประกายเงาวิ่งผ่านผิว fill แบบมุกเงางาม ต่อเนื่องตลอดเวลา */
@@ -241,12 +251,15 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
         .progress-dot {
           position: absolute;
-          /* ใช้ top+margin แทน transform: translateY(-50%) เพราะ framer-motion
-             จะเขียน inline transform ทับตอน animate scale ทำให้จุดหลุดจากเส้น */
-          top: calc(50% - 6px);
+          /* top+bottom 0 พร้อม margin auto บน-ล่าง = กึ่งกลางแนวตั้งเป๊ะบนเส้นเสมอ
+             ไม่พึ่ง transform เลย เลยไม่มีทางถูก framer-motion เขียนทับตอน animate scale */
+          top: 0;
+          bottom: 0;
+          margin-top: auto;
+          margin-bottom: auto;
+          margin-left: -6px;
           width: 12px;
           height: 12px;
-          margin-left: -6px;
           border-radius: 50%;
           background: radial-gradient(circle at 35% 30%, #ffffff, #d7d9e0 70%);
           box-shadow:
