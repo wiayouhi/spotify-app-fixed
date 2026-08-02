@@ -14,8 +14,10 @@ function formatTime(ms) {
 /**
  * ProgressBar — แถบความคืบหน้าเพลง ธีมขาว-แพลทินัมเข้าชุดกับ PlayerControls
  * - เปิดตัว: แถบ "คลี่" ออกจากซ้ายไปขวา + เวลาค่อยๆ จางเข้ามาแบบ stagger
- * - ตลอดเวลาที่กำลังเล่น: มีแสง "หนอนเลื่อย" ไล่คลานอยู่ในส่วนที่เล่นไปแล้ว
- *   (ยืด-หด สลับไปเรื่อยๆ เหมือนหนอนวัดระยะ) + จุดปลายเรืองแสงเต้นตาม
+ * - ตลอดเวลาที่กำลังเล่น: มีแถวปล้องเล็กๆ ยักขึ้น-ยักลงไล่กันเป็นคลื่นในส่วนที่เล่นไปแล้ว
+ *   (เหมือนหนอน/งูเลื่อยคืบตัว) + จุดปลายเรืองแสงเต้นตาม
+ * - จุดปลาย (progress-dot) จัดกึ่งกลางด้วย top+margin แทน transform เพื่อไม่ให้หลุดแนว
+ *   ตอน framer-motion เขียน inline transform ทับระหว่าง animate scale
  */
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
   const [showRemaining, setShowRemaining] = useState(false);
@@ -25,6 +27,9 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
   const progress = durationMs > 0 ? Math.min(progressMs / durationMs, 1) : 0;
   const displayTimeLeft = durationMs - progressMs;
+
+  // จำนวนปล้องหนอน กระจายเท่าๆ กันตลอดแนว fill
+  const wormSegments = Array.from({ length: 16 }, (_, i) => i);
 
   const handleSeek = (e) => {
     if (!trackRef.current || !durationMs) return;
@@ -87,10 +92,15 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           animate={{ width: `${progress * 100}%` }}
           transition={{ duration: 0.25, ease: "linear" }}
         >
-          {/* แสงหนอนเลื่อยไล่คลานอยู่ในส่วนที่เล่นไปแล้ว ต่อเนื่องตลอดเวลาตอนกำลังเล่น */}
+          {/* หนอน/งูเลื่อย: แถวจุดที่ยักขึ้น-ลงไล่กันเป็นคลื่น เหมือนตัวหนอนคืบ ต่อเนื่องตลอดเวลาตอนกำลังเล่น */}
           <span className="worm-track">
-            <span className="worm" />
-            <span className="worm worm-2" />
+            {wormSegments.map((i) => (
+              <span
+                key={i}
+                className="worm-seg"
+                style={{ animationDelay: `${i * 0.09}s` }}
+              />
+            ))}
           </span>
           <span className="fill-sheen" />
         </motion.div>
@@ -180,50 +190,34 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           box-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
         }
 
-        /* แถบพื้นที่ให้หนอนวิ่งอยู่ในนั้น ตัดขอบตามความยาว fill */
+        /* แถวปล้องหนอน กระจายเท่าๆ กันตามแนว fill */
         .worm-track {
           position: absolute;
           inset: 0;
-          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 5px;
           pointer-events: none;
         }
 
-        /* หนอนเลื่อย: ยืดหด (scaleX) พร้อมคืบไปข้างหน้า (translateX) วนตลอดเวลา */
-        .worm {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 0;
-          width: 34%;
-          border-radius: 999px;
-          background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(140, 145, 160, 0.55) 50%,
-            rgba(255, 255, 255, 0) 100%
-          );
-          mix-blend-mode: multiply;
-          opacity: 0;
-          animation: worm-crawl 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        /* แต่ละปล้องยักขึ้น-ยักลงสลับกันไปเรื่อยๆ ให้เห็นเป็นคลื่นไล่กันเหมือนงู/หนอนคืบ */
+        .worm-seg {
+          width: 3px;
+          height: 3px;
+          border-radius: 50%;
+          background: rgba(90, 95, 110, 0.65);
+          transform: translateY(0);
+          opacity: 0.5;
+          animation: worm-bob 1.1s ease-in-out infinite;
           animation-play-state: paused;
         }
-        .worm-2 {
-          width: 22%;
-          animation-duration: 2.6s;
-          animation-delay: 1.3s;
-          opacity: 0;
-        }
-        .progress-track.is-playing .worm {
+        .progress-track.is-playing .worm-seg {
           animation-play-state: running;
         }
-        @keyframes worm-crawl {
-          0%   { transform: translateX(-110%) scaleX(0.55); opacity: 0; }
-          8%   { opacity: 0.9; }
-          28%  { transform: translateX(10%) scaleX(1.2); opacity: 0.9; }
-          50%  { transform: translateX(60%) scaleX(0.55); opacity: 0.9; }
-          72%  { transform: translateX(110%) scaleX(1.2); opacity: 0.9; }
-          92%  { opacity: 0.4; }
-          100% { transform: translateX(220%) scaleX(0.55); opacity: 0; }
+        @keyframes worm-bob {
+          0%, 100% { transform: translateY(-2.5px); opacity: 0.35; }
+          50% { transform: translateY(2.5px); opacity: 0.85; }
         }
 
         /* ประกายเงาวิ่งผ่านผิว fill แบบมุกเงางาม ต่อเนื่องตลอดเวลา */
@@ -247,7 +241,9 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
         .progress-dot {
           position: absolute;
-          top: 50%;
+          /* ใช้ top+margin แทน transform: translateY(-50%) เพราะ framer-motion
+             จะเขียน inline transform ทับตอน animate scale ทำให้จุดหลุดจากเส้น */
+          top: calc(50% - 6px);
           width: 12px;
           height: 12px;
           margin-left: -6px;
@@ -256,7 +252,6 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           box-shadow:
             0 0 6px rgba(255, 255, 255, 0.6),
             0 2px 6px rgba(0, 0, 0, 0.35);
-          transform: translateY(-50%);
           z-index: 2;
         }
 
@@ -278,7 +273,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           .progress-wrap,
           .progress-track,
           .progress-fill,
-          .worm,
+          .worm-seg,
           .fill-sheen,
           .progress-dot,
           .dot-glow {
