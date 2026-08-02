@@ -11,7 +11,7 @@ function formatTime(ms) {
   return `${min}:${sec.toString().padStart(2, "0")}`;
 }
 
-const WAVELENGTH = 52; // px per full cycle — longer = calmer, more elongated wave
+const WAVELENGTH = 64; // px per full cycle — longer = calmer, more elongated wave
 const WAVE_HEIGHT = 22; // vertical room for the wave to swing in
 const AMPLITUDE = 5;
 const STROKE_WIDTH = 5;
@@ -67,6 +67,13 @@ function buildWavePath(width, amplitude, phase) {
   return smoothPathFromPoints(pts);
 }
 
+// NOTE: this component intentionally does NOT reuse the app's old
+// `.progress-wrap / .progress-track / .progress-time / .clickable` classes.
+// Those carried legacy rules (background, padding, line-height, possibly a
+// ::before/::after) that kept causing the phantom white block and the
+// left/right label misalignment even after overriding what we could see.
+// Everything below is fully self-contained inline styling instead, so there
+// is nothing external left to fight with.
 const timeLabelStyle = {
   fontSize: "1rem",
   fontWeight: 500,
@@ -76,6 +83,9 @@ const timeLabelStyle = {
   lineHeight: "1.2rem",
   margin: 0,
   padding: 0,
+  border: 0,
+  boxSizing: "border-box",
+  color: "#fff",
 };
 
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
@@ -135,21 +145,29 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
   return (
     <motion.div
-      className="progress-wrap"
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      style={{ display: "flex", alignItems: "center", gap: "0.75rem", width: "100%" }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        width: "100%",
+        boxSizing: "border-box",
+      }}
     >
       <div
-        className="progress-time"
-        style={{ ...timeLabelStyle, display: "flex", alignItems: "center", justifyContent: "flex-start" }}
+        style={{
+          ...timeLabelStyle,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+        }}
       >
         {formatTime(progressMs)}
       </div>
 
       <div
-        className="progress-track"
         ref={trackRef}
         onClick={handleSeek}
         style={{
@@ -160,11 +178,14 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           alignItems: "center",
           cursor: "pointer",
           background: "transparent",
+          margin: 0,
           padding: 0,
           border: "none",
+          boxSizing: "border-box",
         }}
       >
-        {/* played portion only — unplayed remainder stays fully invisible */}
+        {/* played portion only — the unplayed remainder is fully invisible,
+            no background/border/line drawn anywhere on this element */}
         {trackWidth > 0 && (
           <svg
             width={clipWidthPx}
@@ -198,7 +219,6 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
 
         {/* scrubber dot at the current position */}
         <motion.div
-          className="progress-dot"
           initial={false}
           animate={{ left: clipWidthPx }}
           transition={{ duration: 0.1, ease: "linear" }}
@@ -217,7 +237,6 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
       </div>
 
       <div
-        className="progress-time clickable"
         onClick={() => setShowRemaining(!showRemaining)}
         style={{
           ...timeLabelStyle,
@@ -242,6 +261,8 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
               top: "50%",
               transform: "translateY(-50%)",
               lineHeight: timeLabelStyle.lineHeight,
+              margin: 0,
+              padding: 0,
             }}
           >
             {showRemaining ? `-${formatTime(displayTimeLeft)}` : formatTime(durationMs)}
