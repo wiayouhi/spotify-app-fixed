@@ -11,10 +11,12 @@ function formatTime(ms) {
   return `${min}:${sec.toString().padStart(2, "0")}`;
 }
 
-const WAVELENGTH = 26; // px per full cycle — bigger = gentler, rounder curve
-const WAVE_HEIGHT = 20;
-const AMPLITUDE = 4.2;
+const WAVELENGTH = 34; // px per full cycle — bigger = gentler, rounder curve
+const WAVE_HEIGHT = 30; // overall vertical room for the wave to swing in
+const AMPLITUDE = 6.5;
+const STROKE_WIDTH = 5.5;
 const PHASE_SPEED = 0.0045; // slither speed
+const DOT_SIZE = 15;
 
 // Smooth sine wave path that fades (tapers) to a flat line right at its own
 // tip, and is built from quadratic-bezier midpoints so there are no sharp
@@ -72,7 +74,9 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
     return () => ro.disconnect();
   }, []);
 
-  // continuous slither animation while playing
+  // continuous slither animation while playing — the wave keeps flowing and
+  // the taper near the tip (current position) is recalculated every frame,
+  // so the wavy → straight handoff there is always smooth
   useAnimationFrame((_, delta) => {
     if (!isPlaying || trackWidth <= 0) return;
     phaseRef.current += delta * PHASE_SPEED;
@@ -103,8 +107,11 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
     >
-      <span className="progress-time">{formatTime(progressMs)}</span>
+      <span className="progress-time" style={{ fontSize: "1rem", fontWeight: 500 }}>
+        {formatTime(progressMs)}
+      </span>
 
       <div
         className="progress-track"
@@ -113,22 +120,27 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
         style={{
           position: "relative",
           height: WAVE_HEIGHT,
+          flex: 1,
           display: "flex",
           alignItems: "center",
           cursor: "pointer",
+          background: "transparent", // override any default track background
+          padding: 0,
+          border: "none",
         }}
       >
-        {/* quiet baseline track */}
+        {/* unplayed portion — thin proper timeline line, not a solid block */}
         <div
           style={{
             position: "absolute",
             left: 0,
             right: 0,
             top: "50%",
-            height: 2,
+            height: 3,
             transform: "translateY(-50%)",
-            borderRadius: 2,
-            background: "rgba(255,255,255,0.18)",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.22)",
+            pointerEvents: "none",
           }}
         />
 
@@ -138,30 +150,63 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
             width={clipWidthPx}
             height={WAVE_HEIGHT}
             viewBox={`0 0 ${clipWidthPx} ${WAVE_HEIGHT}`}
-            style={{ position: "absolute", left: 0, top: 0, display: "block" }}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              display: "block",
+              overflow: "visible",
+              pointerEvents: "none",
+            }}
           >
             <path
               d={wavePath}
               fill="none"
               stroke="#fff"
-              strokeWidth={4.5}
+              strokeWidth={STROKE_WIDTH}
               strokeLinecap="round"
               strokeLinejoin="round"
               style={{
                 filter: isPlaying
-                  ? "drop-shadow(0 0 5px rgba(255,255,255,0.55))"
+                  ? "drop-shadow(0 0 6px rgba(255,255,255,0.55))"
                   : "none",
                 transition: "filter 0.3s ease",
               }}
             />
           </svg>
         )}
+
+        {/* scrubber dot at the current position */}
+        <motion.div
+          className="progress-dot"
+          initial={false}
+          animate={{ left: clipWidthPx }}
+          transition={{ duration: 0.1, ease: "linear" }}
+          style={{
+            position: "absolute",
+            top: "50%",
+            width: DOT_SIZE,
+            height: DOT_SIZE,
+            borderRadius: "50%",
+            background: "#fff",
+            transform: "translate(-50%, -50%)",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+          }}
+        />
       </div>
 
       <div
         className="progress-time clickable"
         onClick={() => setShowRemaining(!showRemaining)}
-        style={{ cursor: "pointer", width: "3.5rem", position: "relative" }}
+        style={{
+          cursor: "pointer",
+          width: "4.25rem",
+          position: "relative",
+          fontSize: "1rem",
+          fontWeight: 500,
+          height: "1.2em",
+        }}
       >
         <AnimatePresence mode="wait">
           <motion.span
