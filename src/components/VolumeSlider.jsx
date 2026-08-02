@@ -1,26 +1,40 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { fetchPlaybackState, setPlaybackVolume } from "../utils/spotifyApi";
 import { useDevice } from "../context/DeviceContext";
 
 const POLL_MS = 6000;
 
+/**
+ * VolumeSlider — ปรับเสียง + ซิงกับอุปกรณ์ที่กำลังเล่นอยู่จริง
+ * ดีไซน์ใหม่: แถบยาวแนวนอนโปร่งใส (glass bar) อยู่ล่างสุด มีอนิเมชั่นตอน
+ * hover / ลาก / mount-unmount
+ *
+ * "ซิงกับอุปกรณ์" หมายถึง 2 ทาง:
+ * 1) ลากสไลเดอร์ในเว็บ → สั่งปรับเสียงไปที่อุปกรณ์เป้าหมาย (เว็บถ้า active,
+ *    ไม่งั้นก็อุปกรณ์ที่ Spotify ถืออยู่ว่า active เช่นมือถือ/desktop app)
+ * 2) ถ้าไปปรับเสียงจากอุปกรณ์อื่น (เช่นบนมือถือ) ค่าที่เห็นในเว็บจะอัปเดตตาม
+ *    เพราะ poll สถานะอุปกรณ์เป็นระยะ
+ */
 export default function VolumeSlider({ animSpeed = 1 }) {
   const { targetDeviceId, isWebPlayerActive } = useDevice();
   const [volume, setVolume] = useState(70);
   const [deviceName, setDeviceName] = useState(null);
   const [muted, setMuted] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [hovering, setHovering] = useState(false);
   const lastSentRef = useRef(70);
   const trackRef = useRef(null);
   const debounceRef = useRef(null);
 
   const dur = (b) => b / animSpeed;
 
+  // ─── Poll ปัจจุบัน: ดึง volume/ชื่ออุปกรณ์จริงจาก Spotify ───
   const refresh = useCallback(async () => {
     const state = await fetchPlaybackState();
     if (!state?.device) return;
     setDeviceName(state.device.name);
+    // อย่าเขียนทับค่าที่ผู้ใช้กำลังลากอยู่ในมือ
     if (!dragging && typeof state.device.volumePercent === "number") {
       setVolume(state.device.volumePercent);
       lastSentRef.current = state.device.volumePercent;
@@ -40,15 +54,15 @@ export default function VolumeSlider({ animSpeed = 1 }) {
       debounceRef.current = setTimeout(() => {
         lastSentRef.current = v;
         setPlaybackVolume(v, targetDeviceId);
-      }, 150);
+      }, 150); // debounce กันยิง API รัวๆ ตอนลาก
     },
     [targetDeviceId]
   );
 
-  const applyFromClientY = (clientY) => {
+  const applyFromClientX = (clientX) => {
     if (!trackRef.current) return;
     const rect = trackRef.current.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, 1 - (clientY - rect.top) / rect.height));
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     const v = Math.round(pct * 100);
     setVolume(v);
     setMuted(v === 0);
@@ -57,8 +71,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
 
   const handlePointerDown = (e) => {
     setDragging(true);
-    applyFromClientY(e.clientY);
-    const handleMove = (ev) => applyFromClientY(ev.clientY);
+    applyFromClientX(e.clientX);
+    const handleMove = (ev) => applyFromClientX(ev.clientX);
     const handleUp = () => {
       setDragging(false);
       window.removeEventListener("pointermove", handleMove);
@@ -81,113 +95,240 @@ export default function VolumeSlider({ animSpeed = 1 }) {
     }
   };
 
-  // แอนิเมชั่น "ชีพจร" ตลอดเวลา (Pulse animation)
-  const pulseAnimation = {
-    opacity: volume > 0 ? [0.8, 1, 0.8] : 0.6,
-    scaleX: volume > 0 ? [1, 1.05, 1] : 1,
-    boxShadow: volume > 0 ? ["0 0 10px rgba(29, 185, 84, 0.5)", "0 0 20px rgba(29, 185, 84, 0.8)", "0 0 10px rgba(29, 185, 84, 0.5)"] : "none",
-    transition: {
-      duration: 1.5,
-      repeat: Infinity,
-      ease: "easeInOut"
-    }
-  };
+  const active = dragging || hovering;
+  const shownVolume = muted ? 0 : volume;
 
   return (
-    <motion.div
-      className="volume-slider-wrap-v"
-      title={deviceName ? `กำลังเล่นที่: ${deviceName}` : "ปรับเสียง"}
-      whileHover={{ scale: 1.03, boxShadow: "0 0 20px rgba(29, 185, 84, 0.5)" }} // ขยายขนาดและเพิ่มแสงเรืองเมื่อชี้เมาส์
-    >
-      <button className="volume-mute-btn-v" onClick={toggleMute} title={muted ? "เปิดเสียง" : "ปิดเสียง"}>
-        {muted || volume === 0 ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.18l2.45 2.45c.03-.2.05-.42.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-          </svg>
-        ) : volume < 50 ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.5 12A4.5 4.5 0 0 0 16 8v8a4.5 4.5 0 0 0 2.5-4zM3 9v6h4l5 5V4L7 9H3z" />
-          </svg>
-        ) : (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-          </svg>
-        )}
-      </button>
+    <AnimatePresence>
+      <motion.div
+        className="volume-bar"
+        initial={{ opacity: 0, y: 28 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 28 }}
+        transition={{ duration: dur(0.45), ease: [0.16, 1, 0.3, 1] }}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        title={deviceName ? `กำลังเล่นที่: ${deviceName}` : "ปรับเสียง"}
+      >
+        <motion.button
+          className="volume-mute-btn"
+          onClick={toggleMute}
+          title={muted ? "เปิดเสียง" : "ปิดเสียง"}
+          whileHover={{ scale: 1.12 }}
+          whileTap={{ scale: 0.9 }}
+          transition={{ duration: dur(0.15) }}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={muted || volume === 0 ? "muted" : volume < 50 ? "low" : "high"}
+              initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.6, rotate: 8 }}
+              transition={{ duration: dur(0.18) }}
+              className="volume-icon"
+            >
+              {muted || volume === 0 ? (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16.5 12A4.5 4.5 0 0 0 14 8v2.18l2.45 2.45c.03-.2.05-.42.05-.63zM19 12c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                </svg>
+              ) : volume < 50 ? (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.5 12A4.5 4.5 0 0 0 16 8v8a4.5 4.5 0 0 0 2.5-4zM3 9v6h4l5 5V4L7 9H3z"/>
+                </svg>
+              ) : (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                </svg>
+              )}
+            </motion.span>
+          </AnimatePresence>
+        </motion.button>
 
-      <div className="volume-track-v" ref={trackRef} onPointerDown={handlePointerDown}>
-        <div className="volume-track-bg-v" />
-        <motion.div
-          className="volume-track-fill-v"
-          animate={{ height: `${muted ? 0 : volume}%`, ...pulseAnimation }} // เพิ่มชีพจร
-          transition={{ duration: dragging ? 0 : dur(0.15) }}
-        />
-        <motion.div
-          className="volume-thumb-v"
-          animate={{ bottom: `${muted ? 0 : volume}%`, scale: dragging ? 1.4 : 1 }} // ขยาย thumb เมื่อลาก
-          transition={{ duration: dragging ? 0 : dur(0.15) }}
-        />
-      </div>
+        <div
+          className="volume-track"
+          ref={trackRef}
+          onPointerDown={handlePointerDown}
+        >
+          <motion.div
+            className="volume-track-bg"
+            animate={{ height: active ? 8 : 4 }}
+            transition={{ duration: dur(0.2), ease: "easeOut" }}
+          />
+          <motion.div
+            className="volume-track-fill"
+            animate={{ width: `${shownVolume}%`, height: active ? 8 : 4 }}
+            transition={{
+              width: { duration: dragging ? 0 : dur(0.25), ease: "easeOut" },
+              height: { duration: dur(0.2), ease: "easeOut" },
+            }}
+          />
+          <motion.div
+            className="volume-thumb"
+            animate={{
+              left: `${shownVolume}%`,
+              scale: dragging ? 1.4 : active ? 1.15 : 0,
+              opacity: active || dragging ? 1 : 0,
+            }}
+            transition={{ duration: dragging ? 0 : dur(0.2), ease: "easeOut" }}
+          />
+        </div>
 
-      {isWebPlayerActive && <span className="volume-sync-badge-v" title="ซิงก์กับเว็บเบราว์เซอร์">เว็บ</span>}
+        <motion.span
+          className="volume-value"
+          animate={{ opacity: active ? 1 : 0.55 }}
+          transition={{ duration: dur(0.2) }}
+        >
+          {shownVolume}%
+        </motion.span>
 
-      <style>{`
-        .volume-slider-wrap-v {
-          display: flex; flex-direction: column; align-items: center; gap: 12px;
-          padding: 16px 12px;
-          border-radius: 999px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
-          box-shadow: inset 0 0 10px rgba(0,0,0,0.2), 0 0 15px rgba(29, 185, 84, 0.3);
-          cursor: pointer;
-        }
+        <AnimatePresence>
+          {isWebPlayerActive && (
+            <motion.span
+              className="volume-sync-badge"
+              title="ซิงก์กับเว็บเบราว์เซอร์"
+              initial={{ opacity: 0, scale: 0.8, x: -6 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.8, x: -6 }}
+              transition={{ duration: dur(0.25) }}
+            >
+              เว็บ
+            </motion.span>
+          )}
+        </AnimatePresence>
 
-        .volume-mute-btn-v {
-          width: 30px; height: 30px; flex-shrink: 0;
-          display: flex; align-items: center; justify-content: center;
-          border-radius: 50%; border: none; background: rgba(255,255,255,0.03);
-          color: rgba(255,255,255,0.75); cursor: pointer;
-          transition: color 0.2s, background 0.2s, box-shadow 0.2s;
-        }
-        .volume-mute-btn-v:hover {
-          color: #fff; background: rgba(255,255,255,0.12);
-          box-shadow: 0 0 8px rgba(255,255,255,0.5);
-        }
+        <style>{`
+          .volume-bar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 10px 18px;
+            box-sizing: border-box;
+            border-radius: 16px;
+            background: linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.07),
+              rgba(255, 255, 255, 0.03)
+            );
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+            transition: background 0.25s ease, border-color 0.25s ease,
+              box-shadow 0.25s ease;
+          }
+          .volume-bar:hover {
+            background: linear-gradient(
+              180deg,
+              rgba(255, 255, 255, 0.1),
+              rgba(255, 255, 255, 0.04)
+            );
+            border-color: rgba(29, 185, 84, 0.28);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.34),
+              0 0 0 1px rgba(29, 185, 84, 0.08);
+          }
 
-        .volume-track-v {
-          position: relative;
-          width: 18px; height: 140px;
-          display: flex; flex-direction: column-reverse; align-items: center;
-          cursor: ns-resize;
-          touch-action: none;
-        }
-        .volume-track-bg-v {
-          position: absolute; left: 50%; top: 0; bottom: 0;
-          width: 6px; transform: translateX(-50%);
-          border-radius: 3px; background: rgba(255,255,255,0.15);
-          box-shadow: inset 0 0 5px rgba(0,0,0,0.3);
-        }
-        .volume-track-fill-v {
-          position: absolute; left: 50%; bottom: 0;
-          width: 6px; transform: translateX(-50%);
-          border-radius: 3px; background: #1DB954;
-          box-shadow: 0 0 15px rgba(29, 185, 84, 0.7);
-        }
-        .volume-thumb-v {
-          position: absolute; left: 50%;
-          width: 16px; height: 16px; margin-left: -8px; margin-bottom: -8px;
-          border-radius: 50%; background: #fff;
-          box-shadow: 0 0 10px rgba(0,0,0,0.6);
-          transition: scale 0.1s;
-        }
+          .volume-mute-btn {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.78);
+            cursor: pointer;
+            overflow: hidden;
+            transition: background 0.2s ease, color 0.2s ease;
+          }
+          .volume-mute-btn:hover {
+            color: #1db954;
+            background: rgba(29, 185, 84, 0.14);
+          }
+          .volume-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
 
-        .volume-sync-badge-v {
-          font-size: 10px; font-weight: 600; color: #1DB954;
-          background: rgba(29,185,84,0.16);
-          padding: 2px 8px; border-radius: 999px;
-          white-space: nowrap;
-          box-shadow: 0 0 8px rgba(29, 185, 84, 0.3);
-        }
-      `}</style>
-    </motion.div>
+          .volume-track {
+            position: relative;
+            flex: 1 1 auto;
+            min-width: 0;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            touch-action: none;
+          }
+          .volume-track-bg {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.14);
+          }
+          .volume-track-fill {
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 999px;
+            background: linear-gradient(90deg, #1db954, #21e065);
+            box-shadow: 0 0 12px rgba(29, 185, 84, 0.45);
+          }
+          .volume-thumb {
+            position: absolute;
+            top: 50%;
+            width: 14px;
+            height: 14px;
+            margin-left: -7px;
+            transform: translateY(-50%);
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45),
+              0 0 0 4px rgba(29, 185, 84, 0.18);
+          }
+
+          .volume-value {
+            flex-shrink: 0;
+            width: 34px;
+            text-align: right;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+            color: rgba(255, 255, 255, 0.7);
+          }
+
+          .volume-sync-badge {
+            flex-shrink: 0;
+            font-size: 10px;
+            font-weight: 600;
+            color: #1db954;
+            background: rgba(29, 185, 84, 0.16);
+            border: 1px solid rgba(29, 185, 84, 0.25);
+            padding: 3px 9px;
+            border-radius: 999px;
+            white-space: nowrap;
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .volume-bar,
+            .volume-mute-btn,
+            .volume-track-bg,
+            .volume-track-fill,
+            .volume-thumb,
+            .volume-value,
+            .volume-sync-badge {
+              transition: none !important;
+              animation: none !important;
+            }
+          }
+        `}</style>
+      </motion.div>
+    </AnimatePresence>
   );
 }
