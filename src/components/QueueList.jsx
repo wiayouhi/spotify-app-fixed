@@ -2,7 +2,21 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchQueue } from "../utils/spotifyApi";
 
-export default function QueueList({ currentTrackId, animSpeed = 1 }) {
+/**
+ * QueueList — รายการเพลงถัดไป
+ *
+ * variant:
+ *   "full" (ค่าเริ่มต้น) — สูงเต็มพื้นที่ที่พ่อแม่ให้มา (เหมาะกับหน้าคิวแบบเต็มจอ)
+ *   "half" — สูงครึ่งจอ (50vh) ตัวเอง scroll ได้ในตัว เหมาะกับวางเป็นแผงข้างๆ
+ *
+ * ไม่มีพื้นหลัง/กรอบทึบใดๆ ทั้งสิ้น (โปร่งใสล้วน) ทุกอย่างเป็น inline <style>
+ * ในไฟล์นี้เอง ไม่พึ่ง class ภายนอกที่เคยมีปัญหาสไตล์ตีกัน
+ *
+ * รายการจะแสดง "ทุกเพลง" ในคิว ไม่ตัดเหลือแค่บางส่วน — จุดที่เคยทำให้ดูเหมือน
+ * โชว์แค่ ~5 เพลงคือ container การ scroll ไม่ได้ตั้ง min-height:0 ในโครง flex
+ * เลยโดน parent บีบความสูงจนเห็นได้แค่ไม่กี่แถวโดยไม่ scroll ต่อ ตรงนี้แก้แล้ว
+ */
+export default function QueueList({ currentTrackId, animSpeed = 1, variant = "full" }) {
   const [queue, setQueue] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -33,30 +47,38 @@ export default function QueueList({ currentTrackId, animSpeed = 1 }) {
     return () => clearInterval(interval);
   }, [currentTrackId]);
 
+  const rootClass = `queue-root queue-root--${variant}`;
+
   if (!queue || queue.length === 0) {
     return (
-      <motion.div className="queue-empty-state"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        transition={{ duration: dur(0.4) }}
-      >
+      <div className={rootClass}>
         <motion.div
-          animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.06, 1] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          className="queue-empty-state"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: dur(0.4) }}
         >
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.25)">
-            <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-          </svg>
+          <motion.div
+            animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.06, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(255,255,255,0.25)">
+              <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
+            </svg>
+          </motion.div>
+          <span>ไม่มีรายการในคิว</span>
         </motion.div>
-        <span>ไม่มีรายการในคิว</span>
-      </motion.div>
+        <QueueListStyles />
+      </div>
     );
   }
 
   return (
     <motion.div
-      className="queue-fullscreen-half"
+      className={rootClass}
       initial={{ opacity: 0, x: 60 }}
       animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 60 }}
       transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
     >
       {/* Header */}
@@ -83,7 +105,7 @@ export default function QueueList({ currentTrackId, animSpeed = 1 }) {
         </div>
       </div>
 
-      {/* List */}
+      {/* List — shows every track in the queue, scrolls internally */}
       <div className="queue-scroll-area">
         <AnimatePresence mode="popLayout">
           {queue.map((track, index) => (
@@ -100,7 +122,7 @@ export default function QueueList({ currentTrackId, animSpeed = 1 }) {
                 damping: 30,
                 delay: index < 12 ? index * (0.03 / animSpeed) : 0,
               }}
-              whileHover={{ backgroundColor: "rgba(255,255,255,0.07)", x: 3 }}
+              whileHover={{ backgroundColor: "rgba(255,255,255,0.06)", x: 3 }}
             >
               <div className="queue-index-number">
                 {(index + 1).toString().padStart(2, "0")}
@@ -133,6 +155,201 @@ export default function QueueList({ currentTrackId, animSpeed = 1 }) {
         </AnimatePresence>
         <div style={{ height: "2rem" }} />
       </div>
+
+      <QueueListStyles />
     </motion.div>
+  );
+}
+
+function QueueListStyles() {
+  return (
+    <style>{`
+      /* ทุกอย่างโปร่งใสล้วน ไม่มีกล่อง/ขอบ/พื้นหลังทึบ */
+      .queue-root {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        min-height: 0;
+        background: transparent;
+        box-sizing: border-box;
+        color: #fff;
+      }
+      /* เต็มจอ: กินความสูงทั้งหมดที่ parent ให้มา */
+      .queue-root--full {
+        height: 100%;
+      }
+      /* ครึ่งจอ: จำกัดความสูงไว้ที่ 50vh แล้ว scroll ในตัวเอง */
+      .queue-root--half {
+        height: 50vh;
+        max-height: 50vh;
+      }
+
+      .queue-empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 14px;
+        min-height: 200px;
+      }
+
+      .queue-header-sticky {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 4px 12px;
+        background: transparent;
+        flex-shrink: 0;
+      }
+      .queue-header-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .queue-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.92);
+      }
+      .queue-header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .queue-count {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .queue-refresh-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(255, 255, 255, 0.75);
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+      .queue-refresh-btn:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+      }
+
+      /* คีย์สำคัญที่ทำให้ก่อนหน้านี้เห็นแค่ ~5 เพลง: flex child ต้องมี
+         min-height:0 ถึงจะยอม scroll แทนการโดนบีบความสูงจน content เกินโดนตัด */
+      .queue-scroll-area {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-right: 4px;
+      }
+      .queue-scroll-area::-webkit-scrollbar {
+        width: 6px;
+      }
+      .queue-scroll-area::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+      }
+      .queue-scroll-area::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .queue-item-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: transparent;
+        cursor: default;
+      }
+
+      .queue-index-number {
+        flex-shrink: 0;
+        width: 20px;
+        text-align: center;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: rgba(255, 255, 255, 0.4);
+      }
+
+      .queue-art-wrapper {
+        position: relative;
+        flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .queue-art-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .queue-art-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.35);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .queue-art-wrapper:hover .queue-art-overlay {
+        opacity: 1;
+      }
+
+      .queue-meta-info {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .queue-track-name {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.92);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .queue-artist-name {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .queue-duration {
+        flex-shrink: 0;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: rgba(255, 255, 255, 0.45);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .queue-refresh-btn, .queue-art-overlay {
+          transition: none !important;
+        }
+      }
+    `}</style>
   );
 }
