@@ -214,13 +214,11 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             </motion.div>
           </motion.div>
 
-          {/* จุดวงกลม — ให้ framer-motion คุม transform ทั้งหมด (x/y จัดกึ่งกลาง + scale)
-              เพราะถ้า transform: translate(-50%,-50%) เขียนไว้ใน CSS เฉยๆ พอมี
-              animate({ scale }) framer จะ "เขียนทับ" transform ทั้งก้อนเอง
-              ทำให้จุดหลุดจากจุดกึ่งกลาง (อาการ "ตก" ที่เจอ) ต้องส่ง x/y ผ่าน framer โดยตรง */}
+          {/* จุดวงกลม — จัดกึ่งกลางด้วย margin (ไม่ใช่ transform) เพราะ framer-motion
+              จะเขียนทับ transform ทั้งก้อนเองทันทีที่มี animate({ scale }) อยู่
+              margin ไม่ได้อยู่ใน transform เลยไม่มีทางชนกันอีก */}
           <motion.div
             className="volume-thumb"
-            style={{ x: "-50%", y: "-50%" }}
             animate={{
               left: `${shownVolume}%`,
               scale: dragging ? 1.35 : active ? 1.1 : 0.9,
@@ -437,6 +435,8 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             left: 0;
             width: 14px;
             height: 14px;
+            margin-top: -7px;
+            margin-left: -7px;
             border-radius: 50%;
             background: #fff;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45),
