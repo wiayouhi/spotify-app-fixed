@@ -39,23 +39,27 @@ function smoothPathFromPoints(points) {
   return d;
 }
 
-// Builds the wave path across [0, width]. Both ends are pinned to the exact
-// vertical center: it eases up from flat right at the very start of the
-// track (so the line visibly "grows into" being wavy as the song begins),
-// and eases back down to flat right at the very end of the track — and that
-// end taper shrinks further to fully flat over the final 30s of playback.
-function buildWavePath(width, amplitude, phase) {
+// Builds the wave path across [0, width]. `taperStartX` is where the line
+// eases up from flat (the playhead/dot) — so the VISIBLE (unplayed) part of
+// the wave grows naturally out of the dot instead of popping in at full
+// amplitude — and it eases back down to flat right at the very end of the
+// track, with that end taper shrinking further to fully flat over the final
+// 30s of playback. Everything left of taperStartX is clipped away by the
+// caller anyway, so its exact shape there doesn't matter.
+function buildWavePath(width, amplitude, phase, taperStartX = 0) {
   const mid = WAVE_HEIGHT / 2;
   if (width <= 0) return `M0 ${mid} L0 ${mid}`;
 
   const step = Math.max(4, WAVELENGTH / 8);
-  const taperZone = Math.min(WAVELENGTH * 1.6, width / 2);
+  const remaining = Math.max(0, width - taperStartX);
+  const taperZone = Math.min(WAVELENGTH * 1.6, remaining / 2);
   const pts = [];
 
   for (let x = 0; x <= width; x += step) {
     let env = amplitude;
     if (amplitude > 0 && taperZone > 0) {
-      const startEnv = x < taperZone ? x / taperZone : 1;
+      const distFromStart = x - taperStartX;
+      const startEnv = distFromStart < taperZone ? Math.max(0, distFromStart / taperZone) : 1;
       const endEnv = x > width - taperZone ? Math.max(0, (width - x) / taperZone) : 1;
       env = amplitude * Math.min(startEnv, endEnv);
     }
@@ -78,6 +82,7 @@ const timeLabelStyle = {
   fontSize: "1rem",
   fontWeight: 500,
   fontVariantNumeric: "tabular-nums",
+  width: "3.5rem", // wide enough for "-59:59" so it never wraps or gets clipped
   height: "1.2rem",
   lineHeight: "1.2rem",
   margin: 0,
@@ -86,6 +91,7 @@ const timeLabelStyle = {
   boxSizing: "border-box",
   color: "#fff",
   whiteSpace: "nowrap", // keep the time text on one line so it never wraps and drops down
+  flexShrink: 0,
 };
 
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
@@ -117,20 +123,23 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
   }, []);
 
   // continuous slither animation while playing. The path is now built across
-  // the FULL track width (not just the played portion) — the played segment
-  // gets visually clipped away below, it's not left out of the path itself.
+  // the FULL track width (not just the unplayed portion) — the already-played
+  // segment gets visually clipped away below, it's not left out of the path
+  // itself. The wave eases in starting right at the playhead (the dot), so
+  // it visibly grows out of "now" into the unplayed remainder.
   useAnimationFrame((_, delta) => {
     if (!isPlaying || trackWidth <= 0) return;
     phaseRef.current += delta * PHASE_SPEED;
-    setWavePath(buildWavePath(trackWidth, AMPLITUDE * endScale, phaseRef.current));
+    const playheadX = progress * trackWidth;
+    setWavePath(buildWavePath(trackWidth, AMPLITUDE * endScale, phaseRef.current, playheadX));
   });
 
   // when paused (or on resize) settle into a flat, static line across the
   // full track width
   useEffect(() => {
     if (isPlaying) return;
-    setWavePath(buildWavePath(trackWidth, 0, phaseRef.current));
-  }, [isPlaying, trackWidth]);
+    setWavePath(buildWavePath(trackWidth, 0, phaseRef.current, progress * trackWidth));
+  }, [isPlaying, trackWidth, progress]);
 
   const handleSeek = (e) => {
     if (!trackRef.current || !durationMs) return;
@@ -158,7 +167,6 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
       <div
         style={{
           ...timeLabelStyle,
-          minWidth: "2.75rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-start",
@@ -245,31 +253,25 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
         onClick={() => setShowRemaining(!showRemaining)}
         style={{
           ...timeLabelStyle,
-          minWidth: "2.75rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
-          position: "relative",
           cursor: "pointer",
-          overflow: "visible",
         }}
       >
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={showRemaining ? "remaining" : "duration"}
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
+            exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.2 }}
             style={{
-              position: "absolute",
-              right: 0,
-              top: "50%",
-              transform: "translateY(-50%)",
+              display: "inline-block",
+              whiteSpace: "nowrap",
               lineHeight: timeLabelStyle.lineHeight,
               margin: 0,
               padding: 0,
-              whiteSpace: "nowrap",
             }}
           >
             {showRemaining ? `-${formatTime(displayTimeLeft)}` : formatTime(durationMs)}
