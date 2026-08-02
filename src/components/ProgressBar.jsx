@@ -42,8 +42,8 @@ function smoothPathFromPoints(points) {
 // Builds the wave path across [0, width]. Both ends are pinned to the exact
 // vertical center: it eases up from flat right at the very start of the
 // track (so the line visibly "grows into" being wavy as the song begins),
-// and eases back down to flat right at its own tip (current position) —
-// and that tip taper shrinks further to fully flat over the final 30s.
+// and eases back down to flat right at the very end of the track — and that
+// end taper shrinks further to fully flat over the final 30s of playback.
 function buildWavePath(width, amplitude, phase) {
   const mid = WAVE_HEIGHT / 2;
   if (width <= 0) return `M0 ${mid} L0 ${mid}`;
@@ -78,7 +78,6 @@ const timeLabelStyle = {
   fontSize: "1rem",
   fontWeight: 500,
   fontVariantNumeric: "tabular-nums",
-  width: "2.75rem",
   height: "1.2rem",
   lineHeight: "1.2rem",
   margin: 0,
@@ -86,6 +85,7 @@ const timeLabelStyle = {
   border: 0,
   boxSizing: "border-box",
   color: "#fff",
+  whiteSpace: "nowrap", // keep the time text on one line so it never wraps and drops down
 };
 
 export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
@@ -116,22 +116,21 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
     return () => ro.disconnect();
   }, []);
 
-  // continuous slither animation while playing — recalculated every frame so
-  // the start-of-track ease-in, the tip taper, and the last-30s flatten are
-  // all smooth, never a hard cut
+  // continuous slither animation while playing. The path is now built across
+  // the FULL track width (not just the played portion) — the played segment
+  // gets visually clipped away below, it's not left out of the path itself.
   useAnimationFrame((_, delta) => {
     if (!isPlaying || trackWidth <= 0) return;
     phaseRef.current += delta * PHASE_SPEED;
-    const clipWidth = progress * trackWidth;
-    setWavePath(buildWavePath(clipWidth, AMPLITUDE * endScale, phaseRef.current));
+    setWavePath(buildWavePath(trackWidth, AMPLITUDE * endScale, phaseRef.current));
   });
 
-  // when paused (or on seek/resize) settle into a flat, static line
+  // when paused (or on resize) settle into a flat, static line across the
+  // full track width
   useEffect(() => {
     if (isPlaying) return;
-    const clipWidth = progress * trackWidth;
-    setWavePath(buildWavePath(clipWidth, 0, phaseRef.current));
-  }, [isPlaying, trackWidth, progress]);
+    setWavePath(buildWavePath(trackWidth, 0, phaseRef.current));
+  }, [isPlaying, trackWidth]);
 
   const handleSeek = (e) => {
     if (!trackRef.current || !durationMs) return;
@@ -159,6 +158,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
       <div
         style={{
           ...timeLabelStyle,
+          minWidth: "2.75rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-start",
@@ -184,13 +184,16 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
           boxSizing: "border-box",
         }}
       >
-        {/* played portion only — the unplayed remainder is fully invisible,
-            no background/border/line drawn anywhere on this element */}
+        {/* Full track wave is always drawn (the "normal" unplayed look).
+            The already-played segment (0 → clipWidthPx) is hidden with a
+            clip-path — the element and its path data stay fully intact in
+            the DOM, nothing is deleted/removed, it's just visually clipped
+            so only the unplayed remainder (clipWidthPx → end) shows. */}
         {trackWidth > 0 && (
           <svg
-            width={clipWidthPx}
+            width={trackWidth}
             height={WAVE_HEIGHT}
-            viewBox={`0 0 ${clipWidthPx} ${WAVE_HEIGHT}`}
+            viewBox={`0 0 ${trackWidth} ${WAVE_HEIGHT}`}
             style={{
               position: "absolute",
               left: 0,
@@ -198,6 +201,8 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
               display: "block",
               overflow: "visible",
               pointerEvents: "none",
+              clipPath: `inset(0 0 0 ${clipWidthPx}px)`,
+              WebkitClipPath: `inset(0 0 0 ${clipWidthPx}px)`,
             }}
           >
             <path
@@ -240,12 +245,13 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
         onClick={() => setShowRemaining(!showRemaining)}
         style={{
           ...timeLabelStyle,
+          minWidth: "2.75rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
           position: "relative",
           cursor: "pointer",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <AnimatePresence mode="wait">
@@ -263,6 +269,7 @@ export default function ProgressBar({ progressMs, durationMs, isPlaying }) {
               lineHeight: timeLabelStyle.lineHeight,
               margin: 0,
               padding: 0,
+              whiteSpace: "nowrap",
             }}
           >
             {showRemaining ? `-${formatTime(displayTimeLeft)}` : formatTime(durationMs)}
