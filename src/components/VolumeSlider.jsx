@@ -23,7 +23,9 @@ export default function VolumeSlider({ animSpeed = 1 }) {
   const [muted, setMuted] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [hovering, setHovering] = useState(false);
+  const [syncFlash, setSyncFlash] = useState(null); // { id, direction: 'up' | 'down' }
   const lastSentRef = useRef(70);
+  const knownVolumeRef = useRef(70); // ค่าที่เว็บนี้รู้ล่าสุด ใช้เทียบว่ามีใครไปเปลี่ยนจากที่อื่นไหม
   const trackRef = useRef(null);
   const debounceRef = useRef(null);
 
@@ -36,9 +38,17 @@ export default function VolumeSlider({ animSpeed = 1 }) {
     setDeviceName(state.device.name);
     // อย่าเขียนทับค่าที่ผู้ใช้กำลังลากอยู่ในมือ
     if (!dragging && typeof state.device.volumePercent === "number") {
-      setVolume(state.device.volumePercent);
-      lastSentRef.current = state.device.volumePercent;
-      setMuted(state.device.volumePercent === 0);
+      const newVol = state.device.volumePercent;
+      const prevVol = knownVolumeRef.current;
+      // ถ้าค่าที่ได้ต่างจากที่เรารู้ล่าสุด และไม่ใช่ค่าที่เว็บนี้เพิ่งส่งไปเอง
+      // แปลว่ามีการปรับเสียงจากอุปกรณ์อื่น → จุดไฟ "dynamic lighting" บอกเลย
+      if (newVol !== prevVol && newVol !== lastSentRef.current) {
+        setSyncFlash({ id: Date.now(), direction: newVol > prevVol ? "up" : "down" });
+      }
+      setVolume(newVol);
+      knownVolumeRef.current = newVol;
+      lastSentRef.current = newVol;
+      setMuted(newVol === 0);
     }
   }, [dragging]);
 
@@ -47,6 +57,14 @@ export default function VolumeSlider({ animSpeed = 1 }) {
     const t = setInterval(refresh, POLL_MS);
     return () => clearInterval(t);
   }, [refresh]);
+
+  // เก็บไฟ sync ไว้แป๊บเดียวแล้วดับเอง
+  useEffect(() => {
+    if (!syncFlash) return;
+    const t = setTimeout(() => setSyncFlash(null), dur(1100));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncFlash]);
 
   const sendVolume = useCallback(
     (v) => {
@@ -66,6 +84,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
     const v = Math.round(pct * 100);
     setVolume(v);
     setMuted(v === 0);
+    knownVolumeRef.current = v;
     sendVolume(v);
   };
 
@@ -87,10 +106,12 @@ export default function VolumeSlider({ animSpeed = 1 }) {
       const restore = lastSentRef.current > 0 ? lastSentRef.current : 70;
       setVolume(restore);
       setMuted(false);
+      knownVolumeRef.current = restore;
       sendVolume(restore);
     } else {
       setVolume(0);
       setMuted(true);
+      knownVolumeRef.current = 0;
       sendVolume(0);
     }
   };
@@ -110,6 +131,20 @@ export default function VolumeSlider({ animSpeed = 1 }) {
         onMouseLeave={() => setHovering(false)}
         title={deviceName ? `กำลังเล่นที่: ${deviceName}` : "ปรับเสียง"}
       >
+        {/* ─── Dynamic lighting: วาบไฟตอนมีการปรับเสียงจากอุปกรณ์อื่น ─── */}
+        <AnimatePresence>
+          {syncFlash && (
+            <motion.div
+              key={syncFlash.id}
+              className={`volume-sync-light ${syncFlash.direction}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 0.7, 0] }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: dur(1.1), times: [0, 0.25, 0.6, 1], ease: "easeOut" }}
+            />
+          )}
+        </AnimatePresence>
+
         <motion.button
           className="volume-mute-btn"
           onClick={toggleMute}
@@ -149,28 +184,64 @@ export default function VolumeSlider({ animSpeed = 1 }) {
           ref={trackRef}
           onPointerDown={handlePointerDown}
         >
+          {/* rail: เส้นบางคงที่ ใช้ scaleY แทนการเปลี่ยน height เพื่อไม่ให้จุดศูนย์กลางขยับ */}
           <motion.div
-            className="volume-track-bg"
-            animate={{ height: active ? 8 : 4 }}
+            className="volume-rail"
+            animate={{ scaleY: active ? 1.8 : 1 }}
             transition={{ duration: dur(0.2), ease: "easeOut" }}
-          />
-          <motion.div
-            className="volume-track-fill"
-            animate={{ width: `${shownVolume}%`, height: active ? 8 : 4 }}
-            transition={{
-              width: { duration: dragging ? 0 : dur(0.25), ease: "easeOut" },
-              height: { duration: dur(0.2), ease: "easeOut" },
-            }}
-          />
+          >
+            <div className="volume-rail-bg" />
+            <motion.div
+              className="volume-rail-fill"
+              animate={{ width: `${shownVolume}%` }}
+              transition={{ duration: dragging ? 0 : dur(0.25), ease: "easeOut" }}
+            >
+              {/* ประกายวิ่งต่อเนื่องบนแถบเสียง — เคลื่อนไหวตลอดเวลา */}
+              <div className="volume-rail-shimmer" />
+              {/* วาบไฟวิ่งผ่านตอนถูกซิงจากอุปกรณ์อื่น */}
+              <AnimatePresence>
+                {syncFlash && (
+                  <motion.div
+                    key={syncFlash.id}
+                    className={`volume-rail-sweep ${syncFlash.direction}`}
+                    initial={{ x: "-120%" }}
+                    animate={{ x: "220%" }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: dur(0.9), ease: "easeOut" }}
+                  />
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+
+          {/* จุดวงกลม — วางกึ่งกลางเส้นด้วย translate(-50%, -50%) ตรงเป๊ะทุกขนาด */}
           <motion.div
             className="volume-thumb"
             animate={{
               left: `${shownVolume}%`,
-              scale: dragging ? 1.4 : active ? 1.15 : 0,
-              opacity: active || dragging ? 1 : 0,
+              scale: dragging ? 1.35 : active ? 1.1 : 0.9,
             }}
-            transition={{ duration: dragging ? 0 : dur(0.2), ease: "easeOut" }}
-          />
+            style={{
+              boxShadow:
+                syncFlash?.direction === "up"
+                  ? "0 0 0 6px rgba(29,185,84,0.35), 0 2px 8px rgba(0,0,0,0.45)"
+                  : syncFlash?.direction === "down"
+                  ? "0 0 0 6px rgba(255,159,67,0.35), 0 2px 8px rgba(0,0,0,0.45)"
+                  : undefined,
+            }}
+            transition={{
+              left: { duration: dragging ? 0 : dur(0.25), ease: "easeOut" },
+              scale: { duration: dur(0.2), ease: "easeOut" },
+              boxShadow: { duration: dur(0.3) },
+            }}
+          >
+            {/* ลมหายใจเบาๆ ต่อเนื่อง ให้รู้สึกว่า widget ยังมีชีวิตอยู่ */}
+            <motion.span
+              className="volume-thumb-pulse"
+              animate={{ scale: [1, 1.9, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: dur(2.2), repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.div>
         </div>
 
         <motion.span
@@ -198,6 +269,7 @@ export default function VolumeSlider({ animSpeed = 1 }) {
 
         <style>{`
           .volume-bar {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 14px;
@@ -205,17 +277,17 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             padding: 10px 18px;
             box-sizing: border-box;
             border-radius: 16px;
+            overflow: hidden;
             background: linear-gradient(
               180deg,
               rgba(255, 255, 255, 0.07),
               rgba(255, 255, 255, 0.03)
             );
-            border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(18px) saturate(140%);
             -webkit-backdrop-filter: blur(18px) saturate(140%);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
-            transition: background 0.25s ease, border-color 0.25s ease,
-              box-shadow 0.25s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28),
+              inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            transition: background 0.25s ease, box-shadow 0.25s ease;
           }
           .volume-bar:hover {
             background: linear-gradient(
@@ -223,9 +295,30 @@ export default function VolumeSlider({ animSpeed = 1 }) {
               rgba(255, 255, 255, 0.1),
               rgba(255, 255, 255, 0.04)
             );
-            border-color: rgba(29, 185, 84, 0.28);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.34),
-              0 0 0 1px rgba(29, 185, 84, 0.08);
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          }
+
+          /* วาบไฟทั้งแถบ ตอนมีการปรับเสียงมาจากอุปกรณ์อื่น */
+          .volume-sync-light {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            mix-blend-mode: screen;
+          }
+          .volume-sync-light.up {
+            background: radial-gradient(
+              120% 140% at 15% 50%,
+              rgba(29, 185, 84, 0.35),
+              transparent 60%
+            );
+          }
+          .volume-sync-light.down {
+            background: radial-gradient(
+              120% 140% at 15% 50%,
+              rgba(255, 159, 67, 0.32),
+              transparent 60%
+            );
           }
 
           .volume-mute-btn {
@@ -263,35 +356,94 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             cursor: pointer;
             touch-action: none;
           }
-          .volume-track-bg {
+
+          /* เส้นหนาคงที่ 4px เสมอ ขยายด้วย scaleY เท่านั้น จุดศูนย์กลางเลยไม่ขยับ */
+          .volume-rail {
+            position: relative;
+            width: 100%;
+            height: 4px;
+            border-radius: 999px;
+            transform-origin: center;
+          }
+          .volume-rail-bg {
             position: absolute;
-            left: 0;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
+            inset: 0;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.14);
           }
-          .volume-track-fill {
+          .volume-rail-fill {
             position: absolute;
             left: 0;
-            top: 50%;
-            transform: translateY(-50%);
+            top: 0;
+            height: 100%;
             border-radius: 999px;
+            overflow: hidden;
             background: linear-gradient(90deg, #1db954, #21e065);
             box-shadow: 0 0 12px rgba(29, 185, 84, 0.45);
           }
+
+          /* ประกายวิ่งเบาๆ ต่อเนื่องตลอดเวลาบนเส้นเสียง */
+          .volume-rail-shimmer {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+              100deg,
+              transparent 20%,
+              rgba(255, 255, 255, 0.55) 50%,
+              transparent 80%
+            );
+            background-size: 250% 100%;
+            animation: shimmer-move 2.6s linear infinite;
+            mix-blend-mode: overlay;
+          }
+          @keyframes shimmer-move {
+            0% { background-position: 140% 0; }
+            100% { background-position: -140% 0; }
+          }
+
+          /* ไฟวิ่งผ่านเส้น ตอนเสียงถูกซิงจากอุปกรณ์อื่น */
+          .volume-rail-sweep {
+            position: absolute;
+            top: -6px;
+            bottom: -6px;
+            width: 40%;
+            filter: blur(2px);
+          }
+          .volume-rail-sweep.up {
+            background: linear-gradient(
+              90deg,
+              transparent,
+              rgba(255, 255, 255, 0.9),
+              transparent
+            );
+          }
+          .volume-rail-sweep.down {
+            background: linear-gradient(
+              90deg,
+              transparent,
+              rgba(255, 200, 140, 0.85),
+              transparent
+            );
+          }
+
+          /* จุดวงกลม: จัดกึ่งกลางเส้นด้วย translate(-50%, -50%) แม่นยำทุกขนาด */
           .volume-thumb {
             position: absolute;
             top: 50%;
+            left: 0;
             width: 14px;
             height: 14px;
-            margin-left: -7px;
-            transform: translateY(-50%);
+            transform: translate(-50%, -50%);
             border-radius: 50%;
             background: #fff;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45),
               0 0 0 4px rgba(29, 185, 84, 0.18);
+          }
+          .volume-thumb-pulse {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.7);
           }
 
           .volume-value {
@@ -309,7 +461,6 @@ export default function VolumeSlider({ animSpeed = 1 }) {
             font-weight: 600;
             color: #1db954;
             background: rgba(29, 185, 84, 0.16);
-            border: 1px solid rgba(29, 185, 84, 0.25);
             padding: 3px 9px;
             border-radius: 999px;
             white-space: nowrap;
@@ -318,11 +469,15 @@ export default function VolumeSlider({ animSpeed = 1 }) {
           @media (prefers-reduced-motion: reduce) {
             .volume-bar,
             .volume-mute-btn,
-            .volume-track-bg,
-            .volume-track-fill,
+            .volume-rail,
+            .volume-rail-fill,
+            .volume-rail-shimmer,
+            .volume-rail-sweep,
             .volume-thumb,
+            .volume-thumb-pulse,
             .volume-value,
-            .volume-sync-badge {
+            .volume-sync-badge,
+            .volume-sync-light {
               transition: none !important;
               animation: none !important;
             }
