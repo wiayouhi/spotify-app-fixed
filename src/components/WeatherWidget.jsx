@@ -25,7 +25,7 @@ const WMO_CODES = {
   99: { label: "พายุลูกเห็บหนัก", key: "thunderstorm" },
 };
 
-// Gradient mood per condition — used for the expanded card header.
+// Gradient mood per condition — used for the full-screen header.
 const MOOD = {
   clear: { day: ["#FF9A3D", "#FFD93D"], night: ["#0F2350", "#2A3D6B"] },
   "mostly-clear": { day: ["#4FACFE", "#FFD93D"], night: ["#101E42", "#2C3E68"] },
@@ -183,16 +183,12 @@ function FogLines({ reduce }) {
 }
 
 // ─── Full animated scene per condition, viewBox 0 0 40 40 ───
-// All condition content is wrapped in a small downward translate so the
-// visual weight of each glyph sits on the box's true center — several of
-// the cloud/rain/fog compositions are top-heavy in their raw coordinates,
-// which reads as "icon high, text low" once placed next to a text baseline.
 function WeatherScene({ code, size = 40, isDay = true }) {
   const reduce = useReducedMotion();
   const key = WMO_CODES[code]?.key || "clear";
 
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" style={{ display: "block" }}>
       <defs>
         <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#FFE08A" stopOpacity="0.9" />
@@ -274,7 +270,7 @@ function WeatherScene({ code, size = 40, isDay = true }) {
 
 function DropletIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M12 3s7 7.5 7 12.2A7 7 0 0 1 5 15.2C5 10.5 12 3 12 3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
     </svg>
   );
@@ -282,7 +278,7 @@ function DropletIcon() {
 
 function WindIcon({ rotate = 0 }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ transform: `rotate(${rotate}deg)` }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: `rotate(${rotate}deg)` }}>
       <path d="M12 20V6M6 10l6-6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -290,7 +286,7 @@ function WindIcon({ rotate = 0 }) {
 
 function GaugeIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M4 15a8 8 0 1 1 16 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path d="M12 15l3.5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <circle cx="12" cy="15" r="1.3" fill="currentColor" />
@@ -300,7 +296,7 @@ function GaugeIcon() {
 
 function UvIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
       {Array.from({ length: 8 }).map((_, i) => {
         const a = (i * Math.PI) / 4;
@@ -314,8 +310,16 @@ function UvIcon() {
 
 function ThermoIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -335,34 +339,33 @@ function windDirLabel(deg) {
   return dirs[Math.round(deg / 45) % 8];
 }
 
-// A quiet signature element: an arc tracing the sun's path between sunrise
-// and sunset, with a marker at the current position — this is the one
-// place the card earns a little visual flourish.
+// Signature element: an arc tracing the sun's path between sunrise and
+// sunset, with a marker at the current position.
 function DayArc({ sunrise, sunset, isDay }) {
   if (!sunrise || !sunset) return null;
   const now = Date.now();
   const total = sunset.getTime() - sunrise.getTime();
   const elapsed = now - sunrise.getTime();
   const frac = Math.min(1, Math.max(0, elapsed / total));
-  const cx = 60, cy = 44, r = 40;
+  const cx = 90, cy = 60, r = 58;
   const angle = Math.PI * (1 - frac);
   const mx = cx - r * Math.cos(angle);
   const my = cy - r * Math.sin(angle);
 
   return (
     <div className="weather-arc">
-      <svg width="120" height="52" viewBox="0 0 120 52" fill="none">
-        <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${cx + r} ${cy}`} stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeDasharray="1 4.5" strokeLinecap="round" />
+      <svg width="180" height="72" viewBox="0 0 180 72" fill="none">
+        <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${cx + r} ${cy}`} stroke="rgba(255,255,255,0.22)" strokeWidth="2" strokeDasharray="1 5" strokeLinecap="round" />
         {isDay && frac > 0 && frac < 1 && (
-          <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${mx} ${my}`} stroke="rgba(255,217,61,0.85)" strokeWidth="1.5" strokeLinecap="round" />
+          <path d={`M${cx - r} ${cy} A${r} ${r} 0 0 1 ${mx} ${my}`} stroke="rgba(255,217,61,0.85)" strokeWidth="2" strokeLinecap="round" />
         )}
-        <circle cx={cx - r} cy={cy} r="2" fill="rgba(255,255,255,0.5)" />
-        <circle cx={cx + r} cy={cy} r="2" fill="rgba(255,255,255,0.5)" />
+        <circle cx={cx - r} cy={cy} r="2.5" fill="rgba(255,255,255,0.5)" />
+        <circle cx={cx + r} cy={cy} r="2.5" fill="rgba(255,255,255,0.5)" />
         {isDay && frac >= 0 && frac <= 1 && (
           <motion.circle
             cx={mx}
             cy={my}
-            r="4"
+            r="5.5"
             fill="#FFD93D"
             animate={{ opacity: [0.85, 1, 0.85] }}
             transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
@@ -434,6 +437,19 @@ export default function WeatherWidget({ animSpeed = 1 }) {
     return () => { mounted = false; clearInterval(interval); };
   }, []);
 
+  // Lock page scroll while the full-screen view is open, and let Escape close it.
+  useEffect(() => {
+    if (!expanded) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [expanded]);
+
   const dur = (base) => base / animSpeed;
 
   if (loading) {
@@ -451,59 +467,65 @@ export default function WeatherWidget({ animSpeed = 1 }) {
   const [c1, c2] = weather.isDay ? mood.day : mood.night;
 
   return (
-    <AnimatePresence>
+    <>
       <motion.button
-        key="weather"
         type="button"
-        className={`weather-widget${expanded ? " weather-widget--expanded" : ""}`}
-        onClick={() => setExpanded((v) => !v)}
+        className="weather-widget"
+        onClick={() => setExpanded(true)}
         initial={{ opacity: 0, y: -8, scale: 0.92 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -8, scale: 0.92 }}
         transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
         aria-expanded={expanded}
+        aria-label="เปิดดูรายละเอียดสภาพอากาศ"
       >
-        <div className="weather-row">
-          <motion.div className="weather-icon-wrap" animate={{ y: [0, -2, 0] }} transition={{ duration: dur(3), repeat: Infinity, ease: "easeInOut" }}>
-            <WeatherScene code={weather.code} size={30} isDay={weather.isDay} />
-          </motion.div>
-          <span className="weather-temp">{weather.temp}°</span>
-          <span className="weather-label">{weather.label}</span>
-          <motion.svg className="weather-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: dur(0.25) }}>
-            <path d="M6 9l6 6 6-6" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </motion.svg>
-        </div>
+        <span className="weather-icon-wrap">
+          <WeatherScene code={weather.code} size={26} isDay={weather.isDay} />
+        </span>
+        <span className="weather-temp">{weather.temp}°</span>
+        <span className="weather-label">{weather.label}</span>
+        <WeatherStyles />
+      </motion.button>
 
-        <AnimatePresence initial={false}>
-          {expanded && (
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            className="weather-overlay"
+            onClick={() => setExpanded(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: dur(0.28) }}
+          >
             <motion.div
-              className="weather-profile"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              className="weather-sheet"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
               transition={{ duration: dur(0.35), ease: [0.16, 1, 0.3, 1] }}
             >
-              <div className="weather-profile-inner">
-                <div className="weather-profile-header" style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}>
-                  <div className="weather-profile-header-glow" />
-                  <div className="weather-profile-icon">
-                    <WeatherScene code={weather.code} size={56} isDay={weather.isDay} />
-                  </div>
-                  <div className="weather-profile-temps">
-                    <span className="weather-profile-temp">{weather.temp}°</span>
-                    <div className="weather-profile-meta">
-                      <span className="weather-profile-cond">{weather.label}</span>
-                      <span className="weather-profile-feels">รู้สึกเหมือน {weather.feelsLike}°</span>
-                    </div>
-                  </div>
-                  {weather.tempMax != null && (
-                    <div className="weather-profile-minmax">
-                      <span>สูงสุด {weather.tempMax}°</span>
-                      <span>ต่ำสุด {weather.tempMin}°</span>
-                    </div>
-                  )}
-                </div>
+              <button type="button" className="weather-close" onClick={() => setExpanded(false)} aria-label="ปิด">
+                <CloseIcon />
+              </button>
 
+              <div className="weather-sheet-header" style={{ background: `linear-gradient(150deg, ${c1}, ${c2})` }}>
+                <div className="weather-sheet-header-glow" />
+                <div className="weather-sheet-icon">
+                  <WeatherScene code={weather.code} size={84} isDay={weather.isDay} />
+                </div>
+                <span className="weather-sheet-temp">{weather.temp}°</span>
+                <span className="weather-sheet-cond">{weather.label}</span>
+                <span className="weather-sheet-feels">รู้สึกเหมือน {weather.feelsLike}°</span>
+                {weather.tempMax != null && (
+                  <div className="weather-sheet-minmax">
+                    <span>สูงสุด {weather.tempMax}°</span>
+                    <span className="weather-sheet-minmax-dot" />
+                    <span>ต่ำสุด {weather.tempMin}°</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="weather-sheet-body">
                 <DayArc sunrise={weather.sunrise} sunset={weather.sunset} isDay={weather.isDay} />
 
                 <div className="weather-stat-grid">
@@ -543,58 +565,49 @@ export default function WeatherWidget({ animSpeed = 1 }) {
                 </div>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        <WeatherStyles />
-      </motion.button>
-    </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
 function WeatherStyles() {
   return (
     <style>{`
+      /* Collapsed pill — the button itself is the flex/centering context,
+         with no intermediate wrapper, and every child sits on the same
+         cross-axis center with line-height locked to 1 so text glyphs
+         (including tall Thai vowel/tone marks) don't push the optical
+         center down relative to the icon. */
       .weather-widget {
-        display: block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         border: none;
         cursor: pointer;
-        text-align: left;
         font-family: inherit;
         color: #fff;
         background: rgba(255, 255, 255, 0.06);
         border-radius: 999px;
-        padding: 6px 12px;
+        height: 34px;
+        padding: 0 14px;
         box-sizing: border-box;
         backdrop-filter: blur(14px) saturate(140%);
         -webkit-backdrop-filter: blur(14px) saturate(140%);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-        transition: background 0.2s ease, border-radius 0.25s ease, box-shadow 0.2s ease;
+        transition: background 0.2s ease;
       }
       .weather-widget:hover { background: rgba(255, 255, 255, 0.1); }
-      .weather-widget--expanded {
-        border-radius: 20px;
-        background: rgba(255, 255, 255, 0.09);
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      }
       .weather-widget--loading {
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         background: rgba(255, 255, 255, 0.06);
-      }
-
-      /* Collapsed pill row — every child is vertically centered on the same
-         axis, and text uses line-height:1 so glyph and icon share one
-         optical center instead of the icon reading high and the text low. */
-      .weather-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 30px;
       }
       .weather-icon-wrap {
         display: flex;
@@ -604,96 +617,154 @@ function WeatherStyles() {
         line-height: 0;
       }
       .weather-temp {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         line-height: 1;
         font-size: 14px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         color: #fff;
+        white-space: nowrap;
       }
       .weather-label {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         line-height: 1;
         font-size: 13px;
         color: rgba(255, 255, 255, 0.7);
         white-space: nowrap;
       }
-      .weather-chevron { flex-shrink: 0; margin-left: 2px; }
 
-      /* Expanded "profile" card */
-      .weather-profile { overflow: hidden; }
-      .weather-profile-inner {
-        padding-top: 12px;
-        margin-top: 10px;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        width: 236px;
+      /* Full-screen detail view — transparent, blurred backdrop over
+         whatever sits behind it (glassmorphism, not a solid modal). */
+      .weather-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+        background: rgba(8, 12, 22, 0.28);
+        backdrop-filter: blur(36px) saturate(150%);
+        -webkit-backdrop-filter: blur(36px) saturate(150%);
       }
 
-      .weather-profile-header {
+      .weather-sheet {
         position: relative;
-        border-radius: 16px;
-        padding: 16px;
+        width: min(400px, 100%);
+        max-height: min(720px, 92vh);
+        overflow-y: auto;
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        color: #fff;
+        font-family: inherit;
+      }
+
+      .weather-close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        z-index: 2;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.22);
+        color: #fff;
+        cursor: pointer;
+        backdrop-filter: blur(8px);
+      }
+      .weather-close:hover { background: rgba(0, 0, 0, 0.34); }
+
+      .weather-sheet-header {
+        position: relative;
         overflow: hidden;
+        padding: 40px 28px 28px;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        align-items: center;
+        text-align: center;
       }
-      .weather-profile-header-glow {
+      .weather-sheet-header-glow {
         position: absolute;
         inset: 0;
-        background: radial-gradient(120px 80px at 85% -10%, rgba(255,255,255,0.35), transparent 70%);
+        background: radial-gradient(220px 140px at 80% -10%, rgba(255,255,255,0.35), transparent 70%);
         pointer-events: none;
       }
-      .weather-profile-icon { align-self: flex-end; margin-top: -8px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.15)); }
-      .weather-profile-temps { display: flex; align-items: baseline; gap: 10px; }
-      .weather-profile-temp { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; text-shadow: 0 2px 10px rgba(0,0,0,0.15); }
-      .weather-profile-meta { display: flex; flex-direction: column; gap: 2px; }
-      .weather-profile-cond { font-size: 13.5px; font-weight: 600; }
-      .weather-profile-feels { font-size: 11.5px; color: rgba(255,255,255,0.85); }
-      .weather-profile-minmax { display: flex; gap: 12px; font-size: 11.5px; color: rgba(255,255,255,0.9); font-variant-numeric: tabular-nums; }
+      .weather-sheet-icon { filter: drop-shadow(0 6px 16px rgba(0,0,0,0.18)); margin-bottom: 4px; }
+      .weather-sheet-temp {
+        font-size: 64px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        text-shadow: 0 3px 14px rgba(0,0,0,0.18);
+      }
+      .weather-sheet-cond { margin-top: 8px; font-size: 17px; font-weight: 600; }
+      .weather-sheet-feels { margin-top: 2px; font-size: 13px; color: rgba(255,255,255,0.85); }
+      .weather-sheet-minmax {
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        color: rgba(255,255,255,0.9);
+        font-variant-numeric: tabular-nums;
+      }
+      .weather-sheet-minmax-dot {
+        width: 3px; height: 3px; border-radius: 50%; background: rgba(255,255,255,0.5);
+      }
 
-      .weather-arc { display: flex; flex-direction: column; align-items: center; margin-top: 10px; }
+      .weather-sheet-body { padding: 22px 24px 26px; }
+
+      .weather-arc { display: flex; flex-direction: column; align-items: center; }
       .weather-arc-labels {
         display: flex;
         justify-content: space-between;
-        width: 100%;
-        margin-top: -6px;
-        font-size: 10px;
-        color: rgba(255,255,255,0.55);
+        width: 180px;
+        margin-top: -8px;
+        font-size: 11.5px;
+        color: rgba(255,255,255,0.6);
         font-variant-numeric: tabular-nums;
       }
-      .weather-arc-labels span:nth-child(2) { color: rgba(255,255,255,0.4); }
+      .weather-arc-labels span:nth-child(2) { color: rgba(255,255,255,0.42); }
 
       .weather-stat-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        margin-top: 12px;
+        gap: 10px;
+        margin-top: 20px;
       }
       .weather-stat-card {
         display: flex;
         flex-direction: column;
         align-items: flex-start;
-        gap: 4px;
-        padding: 9px 8px;
-        border-radius: 12px;
+        gap: 6px;
+        padding: 14px 12px;
+        border-radius: 16px;
         background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.07);
-        color: rgba(255,255,255,0.8);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.85);
       }
       .weather-stat-card--muted { color: rgba(255,255,255,0.55); }
       .weather-stat-card-value {
-        font-size: 12.5px;
+        font-size: 14px;
         font-weight: 600;
-        color: rgba(255,255,255,0.95);
+        color: rgba(255,255,255,0.97);
         font-variant-numeric: tabular-nums;
       }
       .weather-stat-card-label {
-        font-size: 9.5px;
+        font-size: 10.5px;
         color: rgba(255,255,255,0.55);
-        line-height: 1.25;
+        line-height: 1.3;
       }
 
       .weather-spinner {
@@ -705,7 +776,7 @@ function WeatherStyles() {
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .weather-widget, .weather-widget--expanded { transition: none !important; }
+        .weather-widget, .weather-overlay, .weather-sheet { transition: none !important; }
       }
     `}</style>
   );
