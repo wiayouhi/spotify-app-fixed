@@ -66,7 +66,7 @@ function useSmoothColor(target, duration = 1.3) {
   return mv;
 }
 
-export default function AlbumArt({ track, isPlaying, colors }) {
+export default function AlbumArt({ track, isPlaying, colors, size = 340 }) {
   const glowTarget = colors?.primary || "#ffffff";
   const glow = useSmoothColor(glowTarget);
   const glowBackground = useMotionTemplate`radial-gradient(circle, ${glow}66, transparent 70%)`;
@@ -108,7 +108,12 @@ export default function AlbumArt({ track, isPlaying, colors }) {
   }, [track?.albumArt]);
 
   return (
-    <div className="album-art-stage">
+    <motion.div
+      className="album-art-stage"
+      layout
+      animate={{ width: size }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+    >
       {/* แสงเรืองรอบปก ไล่สีนุ่ม ๆ + หายใจตลอดเวลา ไม่ต้องรอเปลี่ยนเพลง */}
       <motion.div
         className="album-glow"
@@ -176,6 +181,6 @@ export default function AlbumArt({ track, isPlaying, colors }) {
       {displayedSrc && (
         <div className="album-reflection" style={{ backgroundImage: `url(${displayedSrc})` }} />
       )}
-    </div>
+    </motion.div>
   );
 }
