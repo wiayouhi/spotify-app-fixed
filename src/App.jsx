@@ -234,26 +234,29 @@ function MainApp() {
               <LayoutGroup id="music-layout">
                 {/* Left pane: ปกเพลง + ชื่อเพลง อยู่ตรงนี้เสมอ ขยายใหญ่ขึ้นเมื่อไม่มีเนื้อเพลง/คิวฝั่งขวา */}
                 <motion.div
-                  className={`left-pane ${rightPaneActive ? "" : "left-pane-solo"}`}
+                  className="left-pane"
                   layout
                   initial={{ opacity: 0, x: -30 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <motion.div layout transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}>
-                    <AlbumArt
-                      track={track}
-                      isPlaying={isPlaying}
-                      colors={colors}
-                      size={rightPaneActive ? 340 : 420}
-                    />
-                  </motion.div>
+                  <AlbumArt
+                    track={track}
+                    isPlaying={isPlaying}
+                    colors={colors}
+                    size={rightPaneActive ? 340 : 420}
+                  />
+                </motion.div>
 
-                  <motion.div
-                    className="track-details-wrap"
-                    layout
-                    transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
-                  >
+                {/* Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่ตรงนี้เสมอ ต่อด้วยเนื้อเพลง/คิว ถ้ามี */}
+                <motion.div
+                  className="right-pane"
+                  layout
+                  initial={{ opacity: 0, x: 30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <motion.div className="track-details-wrap" layout transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}>
                     <TrackInfo track={track} />
 
                     {/* Lyrics Ticker */}
@@ -266,41 +269,20 @@ function MainApp() {
                       animSpeed={settings.animEnabled ? animSpeed : 999}
                     />
 
-                    {/* ปุ่มควบคุม — อยู่ใต้ชื่อเพลงตรงนี้ เฉพาะตอนที่ฝั่งขวามีเนื้อเพลง/คิวแสดงอยู่ */}
-                    <AnimatePresence>
-                      {rightPaneActive && (
-                        <motion.div
-                          key="controls-left"
-                          layoutId="player-controls-block"
-                          layout
-                          className="controls-block"
-                          exit={{ opacity: 0 }}
-                          transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
-                        >
-                          <ProgressBar
-                            progressMs={progressMs}
-                            durationMs={track?.durationMs}
-                            isPlaying={isPlaying}
-                          />
-                          <div className="player-controls-row">
-                            <PlayerControls isPlaying={isPlaying} />
-                            <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
-                          </div>
-                          {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <div className="controls-block">
+                      <ProgressBar
+                        progressMs={progressMs}
+                        durationMs={track?.durationMs}
+                        isPlaying={isPlaying}
+                      />
+                      <div className="player-controls-row">
+                        <PlayerControls isPlaying={isPlaying} />
+                        <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
+                      </div>
+                      {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
+                    </div>
                   </motion.div>
-                </motion.div>
 
-                {/* Right pane: เนื้อเพลง/คิว ถ้ามี — ถ้าไม่มีให้ปุ่มควบคุมย้ายมาอยู่ตรงนี้แทน */}
-                <motion.div
-                  className="right-pane"
-                  layout
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
-                >
                   <AnimatePresence mode="wait">
                     {showQueue ? (
                       <motion.div
@@ -333,31 +315,7 @@ function MainApp() {
                           animSpeed={settings.animEnabled ? animSpeed : 999}
                         />
                       </motion.div>
-                    ) : (
-                      // ไม่มีเนื้อเพลง/คิว → ปุ่มควบคุมย้ายมาอยู่ฝั่งขวาแทน ใช้ layoutId เดียวกัน
-                      // เพื่อให้ framer-motion ทำ FLIP animation เลื่อนจากซ้ายไปขวาแบบสมูท
-                      <motion.div
-                        key="controls-right"
-                        layoutId="player-controls-block"
-                        layout
-                        className="controls-block controls-block-right"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
-                      >
-                        <ProgressBar
-                          progressMs={progressMs}
-                          durationMs={track?.durationMs}
-                          isPlaying={isPlaying}
-                        />
-                        <div className="player-controls-row">
-                          <PlayerControls isPlaying={isPlaying} />
-                          <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
-                        </div>
-                        <MiniNextTrack currentTrackId={track?.id} />
-                      </motion.div>
-                    )}
+                    ) : null}
                   </AnimatePresence>
                 </motion.div>
               </LayoutGroup>
