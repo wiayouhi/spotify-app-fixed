@@ -117,14 +117,6 @@ export default function AlbumArt({ track, isPlaying, colors }) {
         transition={{ duration: isPlaying ? 3.5 : 6, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* วงแหวนไล่สีหมุนรอบกรอบตลอดเวลา */}
-      <motion.div
-        className="album-ring"
-        style={{ "--ring-color": glowTarget }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
-      />
-
       {/* กรอบปก — ลอยขึ้นลงเบา ๆ ตลอดเวลา (idle motion) เร็วขึ้นเมื่อกำลังเล่น */}
       <motion.div
         className="album-art-frame"
