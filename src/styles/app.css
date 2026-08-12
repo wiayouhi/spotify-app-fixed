@@ -2089,7 +2089,6 @@ body {
 }
 
 
-
 /* ========================================================
    เพิ่มบล็อกนี้ต่อท้ายไฟล์ styles/app.css ที่มีอยู่เดิม
    ======================================================== */
@@ -2097,7 +2096,7 @@ body {
 /* ───────── Album Art ───────── */
 .album-art-stage {
   position: relative;
-  width: 280px;
+  width: 340px;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
@@ -2113,34 +2112,6 @@ body {
   pointer-events: none;
 }
 
-.album-vinyl {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: #111;
-  z-index: 1;
-}
-
-.album-vinyl-grooves {
-  position: absolute;
-  inset: 6px;
-  border-radius: 50%;
-  background: repeating-radial-gradient(
-    circle,
-    #2a2a2a 0px,
-    #2a2a2a 1px,
-    transparent 2px,
-    transparent 4px
-  );
-}
-
-.album-vinyl-label {
-  position: absolute;
-  inset: 38%;
-  border-radius: 50%;
-  opacity: 0.85;
-}
-
 .album-art-frame {
   position: relative;
   width: 100%;
@@ -2152,6 +2123,7 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* เลเยอร์ล่าง + บน ซ้อนกันสนิทเพื่อ crossfade แบบไม่มีรอยต่อ */
 .album-art-img {
   width: 100%;
   height: 100%;
@@ -2159,6 +2131,15 @@ body {
   display: block;
   position: absolute;
   inset: 0;
+}
+
+.album-art-img-base {
+  z-index: 1;
+}
+
+.album-art-img-top {
+  z-index: 2;
+  will-change: opacity, transform, filter, clip-path;
 }
 
 .album-art-border {
