@@ -2293,12 +2293,53 @@ body {
   background: var(--accent, #1db954);
 }
 
-/* ───────── Solo layout: เมื่อไม่มีเนื้อเพลง/คิว ปุ่มย้ายไปขวา ปกใหญ่ขึ้น ───────── */
-
-/* left-pane โหมดปกติ ควรมี display:flex อยู่แล้วจากสไตล์เดิมของโปรเจกต์ (แนวตั้ง) */
-.left-pane-solo {
-  justify-content: center;
+/* ───────── Left pane: รวมปกเพลง + ชื่อเพลง ให้เป็นชุดเดียวกัน ───────── */
+.left-pane {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 36px 30px;
+  border-radius: 28px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* กล่องข้อมูลเพลง (ชื่อ/ศิลปิน/ปุ่มควบคุม) จัดกึ่งกลางให้เข้าชุดกับปกด้านบน */
+.track-details-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+/* เส้นคั่นบาง ๆ ใต้ปก ก่อนถึงชื่อเพลง ช่วยให้ดูเป็นชุดเดียวกันมากขึ้น */
+.track-details-wrap::before {
+  content: "";
+  width: 40px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  margin-bottom: 2px;
+}
+
+/* โหมด solo (ไม่มีเนื้อเพลง/คิว) — การ์ดใหญ่ขึ้น ระยะห่างมากขึ้น ให้สมดุลกับปกที่ขยาย */
+.left-pane-solo {
+  gap: 40px;
+  padding: 48px 44px;
+}
+
+.left-pane-solo .track-details-wrap {
+  max-width: 480px;
+  gap: 20px;
 }
 
 /* กล่องปุ่มควบคุม ใช้ layoutId เดียวกันทั้ง 2 ตำแหน่ง (ซ้าย/ขวา) เพื่อให้ framer-motion
