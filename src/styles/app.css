@@ -2088,7 +2088,6 @@ body {
   margin: 0;
 }
 
-
 /* ========================================================
    เพิ่มบล็อกนี้ต่อท้ายไฟล์ styles/app.css ที่มีอยู่เดิม
    ======================================================== */
@@ -2293,80 +2292,32 @@ body {
   background: var(--accent, #1db954);
 }
 
-/* ───────── Left pane: รวมปกเพลง + ชื่อเพลง ให้เป็นชุดเดียวกัน ───────── */
+/* ───────── Left pane: มีแค่ปกเพลงล้วน ๆ ไม่มีกรอบ/พื้นหลัง ───────── */
 .left-pane {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
-  padding: 36px 30px;
-  border-radius: 28px;
-  text-align: center;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-/* กล่องข้อมูลเพลง (ชื่อ/ศิลปิน/ปุ่มควบคุม) จัดกึ่งกลางให้เข้าชุดกับปกด้านบน */
+/* ───────── Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่บนสุดเสมอ ต่อด้วยเนื้อเพลง/คิว ───────── */
+.right-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+}
+
 .track-details-wrap {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 16px;
+  align-items: flex-start;
+  gap: 14px;
   width: 100%;
-  max-width: 420px;
-  text-align: center;
 }
 
-/* เส้นคั่นบาง ๆ ใต้ปก ก่อนถึงชื่อเพลง ช่วยให้ดูเป็นชุดเดียวกันมากขึ้น */
-.track-details-wrap::before {
-  content: "";
-  width: 40px;
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  margin-bottom: 2px;
-}
-
-/* โหมด solo (ไม่มีเนื้อเพลง/คิว) — การ์ดใหญ่ขึ้น ระยะห่างมากขึ้น ให้สมดุลกับปกที่ขยาย */
-.left-pane-solo {
-  gap: 40px;
-  padding: 48px 44px;
-}
-
-.left-pane-solo .track-details-wrap {
-  max-width: 480px;
-  gap: 20px;
-}
-
-/* กล่องปุ่มควบคุม ใช้ layoutId เดียวกันทั้ง 2 ตำแหน่ง (ซ้าย/ขวา) เพื่อให้ framer-motion
-   ทำ FLIP animation เลื่อนตำแหน่ง/ขนาดให้เองแบบสมูท ไม่ต้องเขียน keyframe เอง */
 .controls-block {
   display: flex;
   flex-direction: column;
   gap: 14px;
   width: 100%;
-}
-
-/* ตอนอยู่ฝั่งขวา (โหมด solo) ให้ดูใหญ่ขึ้นและอยู่กึ่งกลางแนวตั้ง สวยงามขึ้น */
-.controls-block-right {
-  max-width: 420px;
-  width: 100%;
-  margin: 0 auto;
-  gap: 20px;
-  transform: scale(1.08);
-}
-
-.controls-block-right .player-controls-row {
-  transform: scale(1.05);
-}
-
-/* right-pane ต้องรองรับทั้งเนื้อเพลง/คิว (ชิดขอบ) และปุ่มควบคุม (จัดกึ่งกลาง) */
-.right-pane {
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
