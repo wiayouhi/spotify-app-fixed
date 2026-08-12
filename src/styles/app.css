@@ -49,8 +49,8 @@ body {
   z-index: 2;
   display: grid;
   grid-template-columns: 1fr 1.2fr;
-  grid-template-rows: minmax(0, 1fr); /* บังคับให้แถวเดียวยืดเต็มความสูงจริง ไม่ใช่แค่สูงเท่าเนื้อหา (auto) */
-  gap: 4vw;
+  grid-template-rows: 1fr 1fr;
+  gap: 0 4vw;
   align-items: center;
   height: 100%;
   max-width: 1400px;
@@ -62,9 +62,16 @@ body {
 @media (max-width: 860px) {
   .app-content {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     padding: 5rem 6vw 2vh;
     gap: 2vh;
+  }
+  .album-art-cell.active, .album-art-cell.inactive,
+  .track-details-cell.active, .track-details-cell.inactive,
+  .right-panel-cell {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    padding: 0 !important;
   }
 }
 
@@ -579,6 +586,7 @@ body {
   height: 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
   overflow: hidden;
   min-height: 0;
 }
@@ -608,7 +616,7 @@ body {
 .lyrics-scroll {
   height: 100%;
   width: 100%;
-  overflow-y: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
   mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
@@ -2293,45 +2301,66 @@ body {
   background: var(--accent, #1db954);
 }
 
-/* ───────── Left pane: มีแค่ปกเพลงล้วน ๆ ไม่มีกรอบ/พื้นหลัง ─────────
-   (override ค่าเก่าจากบล็อก "LEFT PANE" ด้านบนของไฟล์ที่ตั้ง
-   flex-direction:column / text-align:center / gap:1.8rem ไว้ ซึ่งเป็นดีไซน์
-   เก่าที่ left-pane เคยรวมทั้งปก+ชื่อเพลง ตอนนี้ left-pane มีแค่ AlbumArt) */
-.left-pane {
+/* ───────── Grid Cells for Seamless Animation ───────── */
+
+.album-art-cell {
   display: flex;
-  flex-direction: row;
-  align-items: center;
   justify-content: center;
-  gap: 0;
-  text-align: initial;
-  height: 100%;
   width: 100%;
 }
 
-/* ───────── Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่บนสุดเสมอ ต่อด้วยเนื้อเพลง/คิว ─────────
-   (override ค่าเก่าจากบล็อก "RIGHT PANE" ด้านบนของไฟล์ที่ตั้ง position:relative /
-   height:100% / align-items:center (แนวนอน) ไว้ — ค่าที่เหลือค้างนั้นทำให้เนื้อหา
-   ชิดขอบบนแทนที่จะอยู่กึ่งกลางแนวตั้งตอนไม่มีเนื้อเพลง/คิว) */
-.right-pane {
-  position: static;
+.album-art-cell.active {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  padding-bottom: 0.9rem;
+}
+
+.album-art-cell.inactive {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding-bottom: 0;
+}
+
+.track-details-cell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.track-details-cell.active {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  padding-top: 0.9rem;
+}
+
+.track-details-cell.inactive {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding-top: 0;
+}
+
+.right-panel-cell {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: center; /* จัดกึ่งกลางแนวตั้งทั้งบล็อกเมื่อเนื้อหาสั้น (ไม่มีเนื้อเพลง/คิว) */
-  gap: 22px;
-  height: 100%;
-  width: 100%;
-  min-height: 0;
   overflow: hidden;
 }
 
 .track-details-wrap {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  text-align: center;
   gap: 14px;
   width: 100%;
-  flex: 0 0 auto; /* ไม่ยืด/หด คงขนาดตามเนื้อหาเสมอ */
+  flex: 0 0 auto;
 }
 
 .controls-block {
@@ -2341,13 +2370,9 @@ body {
   width: 100%;
 }
 
-/* override ค่าเก่า .queue-wrapper/.lyrics-wrapper (height:100% ตายตัว) ที่เคย
-   ออกแบบไว้ตอน right-pane มีแค่ตัวเดียว — ตอนนี้ต้องแชร์พื้นที่กับ
-   track-details-wrap ด้านบน จึงใช้ flex:1 ให้มันขยายเติมพื้นที่ที่เหลือแทน
-   เพื่อไม่ให้ความสูงรวมเกิน container จนไป squeeze คอลัมน์ซ้ายให้แคบลง */
 .queue-wrapper,
 .lyrics-wrapper {
-  height: auto;
+  height: 100%;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;

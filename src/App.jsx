@@ -232,12 +232,12 @@ function MainApp() {
               transition={{ duration: dur(0.4) }}
             >
               <LayoutGroup id="music-layout">
-                {/* Left pane: ปกเพลง + ชื่อเพลง อยู่ตรงนี้เสมอ ขยายใหญ่ขึ้นเมื่อไม่มีเนื้อเพลง/คิวฝั่งขวา */}
+                {/* 1. Album Art */}
                 <motion.div
-                  className="left-pane"
+                  className={`album-art-cell ${rightPaneActive ? 'active' : 'inactive'}`}
                   layout
-                  initial={{ opacity: 0, x: -30 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
                 >
                   <AlbumArt
@@ -248,18 +248,16 @@ function MainApp() {
                   />
                 </motion.div>
 
-                {/* Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่ตรงนี้เสมอ ต่อด้วยเนื้อเพลง/คิว ถ้ามี */}
-                <motion.div
-                  className="right-pane"
-                  layout
-                  initial={{ opacity: 0, x: 30 }}
-                  animate={{ opacity: 1, x: 0 }}
+                {/* 2. Track Details (ALWAYS RENDERED ONCE) */}
+                <motion.div 
+                  className={`track-details-cell ${rightPaneActive ? 'active' : 'inactive'}`} 
+                  layout 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <motion.div className="track-details-wrap" layout transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}>
+                  <div className="track-details-wrap">
                     <TrackInfo track={track} />
-
-                    {/* Lyrics Ticker */}
                     <LyricsTicker
                       synced={lyrics.synced}
                       plain={lyrics.plain}
@@ -268,7 +266,6 @@ function MainApp() {
                       show={settings.showLyricsTicker && lyrics.status === "found"}
                       animSpeed={settings.animEnabled ? animSpeed : 999}
                     />
-
                     <div className="controls-block">
                       <ProgressBar
                         progressMs={progressMs}
@@ -281,42 +278,38 @@ function MainApp() {
                       </div>
                       {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
                     </div>
-                  </motion.div>
+                  </div>
+                </motion.div>
 
-                  <AnimatePresence mode="wait">
-                    {showQueue ? (
-                      <motion.div
-                        key="queue"
-                        initial={{ opacity: 0, x: 40, scale: 0.97 }}
-                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -40, scale: 0.97 }}
-                        transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
-                        className="queue-wrapper"
-                      >
+                {/* 3. Lyrics or Queue */}
+                <AnimatePresence mode="wait">
+                  {(showQueue || rightPaneActive) && (
+                    <motion.div
+                      key={showQueue ? "queue" : "lyrics"}
+                      className={`right-panel-cell ${showQueue ? "queue-wrapper" : "lyrics-wrapper"}`}
+                      layout
+                      initial={{ opacity: 0, x: 40, scale: 0.97 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: -40, scale: 0.97 }}
+                      transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
+                    >
+                      {showQueue ? (
                         <QueueList currentTrackId={track?.id} animSpeed={settings.animEnabled ? animSpeed : 999} />
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key="lyrics"
-                        className="lyrics-wrapper"
-                        initial={{ opacity: 0, x: 40, scale: 0.97 }}
-                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                        exit={{ opacity: 0, x: -40, scale: 0.97 }}
-                        transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
-                      >
+                      ) : (
                         <LyricsView
                           status={lyrics.status}
                           synced={lyrics.synced}
                           plain={lyrics.plain}
                           currentLineIndex={lyrics.currentLineIndex}
+                          progressMs={progressMs}
                           trackId={track?.id}
                           showPanel={settings.showLyricsPanel}
                           animSpeed={settings.animEnabled ? animSpeed : 999}
                         />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </LayoutGroup>
             </motion.div>
           </AnimatePresence>
