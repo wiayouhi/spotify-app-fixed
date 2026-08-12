@@ -25,7 +25,7 @@ import VolumeSlider from "./components/VolumeSlider";
 import IconButton from "./components/IconButton";
 import MoreMenu from "./components/MoreMenu";
 import { DeviceProvider } from "./context/DeviceContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 import "./styles/app.css";
 
@@ -79,6 +79,9 @@ function MainApp() {
   };
 
   const dur = (b) => (settings.animEnabled ? b / animSpeed : 0);
+
+  // มีเนื้อหาให้แสดงฝั่งขวาไหม (คิวเพลง หรือ เนื้อเพลงที่หาเจอ) — ถ้าไม่มี ให้ย้ายปุ่มควบคุมไปฝั่งขวาแทน
+  const rightPaneActive = showQueue || (settings.showLyricsPanel && lyrics.status === "found");
 
   if (authError) {
     clearTokens();
@@ -228,84 +231,136 @@ function MainApp() {
               exit={{ opacity: 0 }}
               transition={{ duration: dur(0.4) }}
             >
-              {/* Left pane */}
-              <motion.div
-                className="left-pane"
-                layout
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
-              >
-                <AlbumArt track={track} isPlaying={isPlaying} colors={colors} />
-                <motion.div className="track-details-wrap" layout>
-                  <TrackInfo track={track} />
+              <LayoutGroup id="music-layout">
+                {/* Left pane: ปกเพลง + ชื่อเพลง อยู่ตรงนี้เสมอ ขยายใหญ่ขึ้นเมื่อไม่มีเนื้อเพลง/คิวฝั่งขวา */}
+                <motion.div
+                  className={`left-pane ${rightPaneActive ? "" : "left-pane-solo"}`}
+                  layout
+                  initial={{ opacity: 0, x: -30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <motion.div layout transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}>
+                    <AlbumArt
+                      track={track}
+                      isPlaying={isPlaying}
+                      colors={colors}
+                      size={rightPaneActive ? 340 : 420}
+                    />
+                  </motion.div>
 
-                  {/* Lyrics Ticker */}
-                  <LyricsTicker
-                    synced={lyrics.synced}
-                    plain={lyrics.plain}
-                    currentLineIndex={lyrics.currentLineIndex}
-                    trackId={track?.id}
-                    show={settings.showLyricsTicker && lyrics.status === "found"}
-                    animSpeed={settings.animEnabled ? animSpeed : 999}
-                  />
+                  <motion.div
+                    className="track-details-wrap"
+                    layout
+                    transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <TrackInfo track={track} />
 
-                  <ProgressBar
-                    progressMs={progressMs}
-                    durationMs={track?.durationMs}
-                    isPlaying={isPlaying}
-                  />
-                  <div className="player-controls-row">
-                    <PlayerControls isPlaying={isPlaying} />
-                    <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
-                  </div>
-                  {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
+                    {/* Lyrics Ticker */}
+                    <LyricsTicker
+                      synced={lyrics.synced}
+                      plain={lyrics.plain}
+                      currentLineIndex={lyrics.currentLineIndex}
+                      trackId={track?.id}
+                      show={settings.showLyricsTicker && lyrics.status === "found"}
+                      animSpeed={settings.animEnabled ? animSpeed : 999}
+                    />
+
+                    {/* ปุ่มควบคุม — อยู่ใต้ชื่อเพลงตรงนี้ เฉพาะตอนที่ฝั่งขวามีเนื้อเพลง/คิวแสดงอยู่ */}
+                    <AnimatePresence>
+                      {rightPaneActive && (
+                        <motion.div
+                          key="controls-left"
+                          layoutId="player-controls-block"
+                          layout
+                          className="controls-block"
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                        >
+                          <ProgressBar
+                            progressMs={progressMs}
+                            durationMs={track?.durationMs}
+                            isPlaying={isPlaying}
+                          />
+                          <div className="player-controls-row">
+                            <PlayerControls isPlaying={isPlaying} />
+                            <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
+                          </div>
+                          {!showQueue && <MiniNextTrack currentTrackId={track?.id} />}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
                 </motion.div>
-              </motion.div>
 
-              {/* Right pane */}
-              <motion.div
-                className="right-pane"
-                layout
-                initial={{ opacity: 0, x: 30 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: dur(0.5), ease: [0.16, 1, 0.3, 1] }}
-              >
-                <AnimatePresence mode="wait">
-                  {showQueue ? (
-                    <motion.div
-                      key="queue"
-                      initial={{ opacity: 0, x: 40, scale: 0.97 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      exit={{ opacity: 0, x: -40, scale: 0.97 }}
-                      transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
-                      className="queue-wrapper"
-                    >
-                      <QueueList currentTrackId={track?.id} animSpeed={settings.animEnabled ? animSpeed : 999} />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="lyrics"
-                      className="lyrics-wrapper"
-                      initial={{ opacity: 0, x: 40, scale: 0.97 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      exit={{ opacity: 0, x: -40, scale: 0.97 }}
-                      transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
-                      style={{ height: "100%", width: "100%" }}
-                    >
-                      <LyricsView
-                        status={lyrics.status}
-                        synced={lyrics.synced}
-                        plain={lyrics.plain}
-                        currentLineIndex={lyrics.currentLineIndex}
-                        trackId={track?.id}
-                        showPanel={settings.showLyricsPanel}
-                        animSpeed={settings.animEnabled ? animSpeed : 999}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                {/* Right pane: เนื้อเพลง/คิว ถ้ามี — ถ้าไม่มีให้ปุ่มควบคุมย้ายมาอยู่ตรงนี้แทน */}
+                <motion.div
+                  className="right-pane"
+                  layout
+                  initial={{ opacity: 0, x: 30 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <AnimatePresence mode="wait">
+                    {showQueue ? (
+                      <motion.div
+                        key="queue"
+                        initial={{ opacity: 0, x: 40, scale: 0.97 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: -40, scale: 0.97 }}
+                        transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
+                        className="queue-wrapper"
+                      >
+                        <QueueList currentTrackId={track?.id} animSpeed={settings.animEnabled ? animSpeed : 999} />
+                      </motion.div>
+                    ) : settings.showLyricsPanel && lyrics.status === "found" ? (
+                      <motion.div
+                        key="lyrics"
+                        className="lyrics-wrapper"
+                        initial={{ opacity: 0, x: 40, scale: 0.97 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: -40, scale: 0.97 }}
+                        transition={{ duration: dur(0.4), ease: [0.16, 1, 0.3, 1] }}
+                        style={{ height: "100%", width: "100%" }}
+                      >
+                        <LyricsView
+                          status={lyrics.status}
+                          synced={lyrics.synced}
+                          plain={lyrics.plain}
+                          currentLineIndex={lyrics.currentLineIndex}
+                          trackId={track?.id}
+                          showPanel={settings.showLyricsPanel}
+                          animSpeed={settings.animEnabled ? animSpeed : 999}
+                        />
+                      </motion.div>
+                    ) : (
+                      // ไม่มีเนื้อเพลง/คิว → ปุ่มควบคุมย้ายมาอยู่ฝั่งขวาแทน ใช้ layoutId เดียวกัน
+                      // เพื่อให้ framer-motion ทำ FLIP animation เลื่อนจากซ้ายไปขวาแบบสมูท
+                      <motion.div
+                        key="controls-right"
+                        layoutId="player-controls-block"
+                        layout
+                        className="controls-block controls-block-right"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: dur(0.6), ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        <ProgressBar
+                          progressMs={progressMs}
+                          durationMs={track?.durationMs}
+                          isPlaying={isPlaying}
+                        />
+                        <div className="player-controls-row">
+                          <PlayerControls isPlaying={isPlaying} />
+                          <VolumeSlider animSpeed={settings.animEnabled ? animSpeed : 999} />
+                        </div>
+                        <MiniNextTrack currentTrackId={track?.id} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </LayoutGroup>
             </motion.div>
           </AnimatePresence>
         )}
