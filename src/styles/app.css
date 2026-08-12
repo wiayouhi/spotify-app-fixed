@@ -2096,11 +2096,11 @@ body {
 /* ───────── Album Art ───────── */
 .album-art-stage {
   position: relative;
-  width: 340px;
   aspect-ratio: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .album-glow {
@@ -2291,4 +2291,41 @@ body {
   height: 6px;
   border-radius: 50%;
   background: var(--accent, #1db954);
+}
+
+/* ───────── Solo layout: เมื่อไม่มีเนื้อเพลง/คิว ปุ่มย้ายไปขวา ปกใหญ่ขึ้น ───────── */
+
+/* left-pane โหมดปกติ ควรมี display:flex อยู่แล้วจากสไตล์เดิมของโปรเจกต์ (แนวตั้ง) */
+.left-pane-solo {
+  justify-content: center;
+  align-items: center;
+}
+
+/* กล่องปุ่มควบคุม ใช้ layoutId เดียวกันทั้ง 2 ตำแหน่ง (ซ้าย/ขวา) เพื่อให้ framer-motion
+   ทำ FLIP animation เลื่อนตำแหน่ง/ขนาดให้เองแบบสมูท ไม่ต้องเขียน keyframe เอง */
+.controls-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+/* ตอนอยู่ฝั่งขวา (โหมด solo) ให้ดูใหญ่ขึ้นและอยู่กึ่งกลางแนวตั้ง สวยงามขึ้น */
+.controls-block-right {
+  max-width: 420px;
+  width: 100%;
+  margin: 0 auto;
+  gap: 20px;
+  transform: scale(1.08);
+}
+
+.controls-block-right .player-controls-row {
+  transform: scale(1.05);
+}
+
+/* right-pane ต้องรองรับทั้งเนื้อเพลง/คิว (ชิดขอบ) และปุ่มควบคุม (จัดกึ่งกลาง) */
+.right-pane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
