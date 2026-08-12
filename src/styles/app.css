@@ -2292,19 +2292,36 @@ body {
   background: var(--accent, #1db954);
 }
 
-/* ───────── Left pane: มีแค่ปกเพลงล้วน ๆ ไม่มีกรอบ/พื้นหลัง ───────── */
+/* ───────── Left pane: มีแค่ปกเพลงล้วน ๆ ไม่มีกรอบ/พื้นหลัง ─────────
+   (override ค่าเก่าจากบล็อก "LEFT PANE" ด้านบนของไฟล์ที่ตั้ง
+   flex-direction:column / text-align:center / gap:1.8rem ไว้ ซึ่งเป็นดีไซน์
+   เก่าที่ left-pane เคยรวมทั้งปก+ชื่อเพลง ตอนนี้ left-pane มีแค่ AlbumArt) */
 .left-pane {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
+  gap: 0;
+  text-align: initial;
+  height: 100%;
+  width: 100%;
 }
 
-/* ───────── Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่บนสุดเสมอ ต่อด้วยเนื้อเพลง/คิว ───────── */
+/* ───────── Right pane: ชื่อเพลง + ปุ่มควบคุม อยู่บนสุดเสมอ ต่อด้วยเนื้อเพลง/คิว ─────────
+   (override ค่าเก่าจากบล็อก "RIGHT PANE" ด้านบนของไฟล์ที่ตั้ง position:relative /
+   height:100% / align-items:center (แนวนอน) ไว้ — ค่าที่เหลือค้างนั้นทำให้เนื้อหา
+   ชิดขอบบนแทนที่จะอยู่กึ่งกลางแนวตั้งตอนไม่มีเนื้อเพลง/คิว) */
 .right-pane {
+  position: static;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: center; /* จัดกึ่งกลางแนวตั้งทั้งบล็อกเมื่อเนื้อหาสั้น (ไม่มีเนื้อเพลง/คิว) */
   gap: 22px;
+  height: 100%;
   width: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .track-details-wrap {
@@ -2313,6 +2330,7 @@ body {
   align-items: flex-start;
   gap: 14px;
   width: 100%;
+  flex: 0 0 auto; /* ไม่ยืด/หด คงขนาดตามเนื้อหาเสมอ */
 }
 
 .controls-block {
@@ -2320,4 +2338,17 @@ body {
   flex-direction: column;
   gap: 14px;
   width: 100%;
+}
+
+/* override ค่าเก่า .queue-wrapper/.lyrics-wrapper (height:100% ตายตัว) ที่เคย
+   ออกแบบไว้ตอน right-pane มีแค่ตัวเดียว — ตอนนี้ต้องแชร์พื้นที่กับ
+   track-details-wrap ด้านบน จึงใช้ flex:1 ให้มันขยายเติมพื้นที่ที่เหลือแทน
+   เพื่อไม่ให้ความสูงรวมเกิน container จนไป squeeze คอลัมน์ซ้ายให้แคบลง */
+.queue-wrapper,
+.lyrics-wrapper {
+  height: auto;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
