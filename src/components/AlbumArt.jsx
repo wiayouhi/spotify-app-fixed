@@ -110,7 +110,6 @@ export default function AlbumArt({ track, isPlaying, colors, size = 340 }) {
   return (
     <motion.div
       className="album-art-stage"
-      layout
       animate={{ width: size }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
     >
