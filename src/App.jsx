@@ -295,7 +295,7 @@ function MainApp() {
                       >
                         <QueueList currentTrackId={track?.id} animSpeed={settings.animEnabled ? animSpeed : 999} />
                       </motion.div>
-                    ) : settings.showLyricsPanel && lyrics.status === "found" ? (
+                    ) : (
                       <motion.div
                         key="lyrics"
                         className="lyrics-wrapper"
@@ -315,7 +315,7 @@ function MainApp() {
                           animSpeed={settings.animEnabled ? animSpeed : 999}
                         />
                       </motion.div>
-                    ) : null}
+                    )}
                   </AnimatePresence>
                 </motion.div>
               </LayoutGroup>
