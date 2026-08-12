@@ -49,6 +49,7 @@ body {
   z-index: 2;
   display: grid;
   grid-template-columns: 1fr 1.2fr;
+  grid-template-rows: minmax(0, 1fr); /* บังคับให้แถวเดียวยืดเต็มความสูงจริง ไม่ใช่แค่สูงเท่าเนื้อหา (auto) */
   gap: 4vw;
   align-items: center;
   height: 100%;
